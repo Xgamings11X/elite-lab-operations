@@ -6,10 +6,27 @@ import { commandLinks,recentActivity,trendChart } from './operations-view.js';
 const $=(selector,el=document)=>el.querySelector(selector);
 const root=$('#app'),dialog=$('#dialog'),overlay=$('#transition');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+const motionControl=document.querySelector('#motion-control');
+let preference;
+try {preference=localStorage.getItem('elite-motion');} catch {}
+function applyMotion(){
+  const enabled=preference?preference==='on':!reduced.matches;
+  document.documentElement.dataset.motion=enabled?'on':'off';
+  motionControl.hidden=false;
+  motionControl.textContent=enabled?'Animasi aktif':'Aktifkan animasi';
+  motionControl.setAttribute('aria-pressed',String(enabled));
+  if(enabled) watchSections();
+  else {reveals.disconnect();overlay.className='';}
+}
+motionControl.onclick=()=>{
+  preference=document.documentElement.dataset.motion==='on'?'off':'on';
+  try {localStorage.setItem('elite-motion',preference);} catch {}
+  applyMotion();
+};
+reduced.addEventListener('change',applyMotion);
 const state={day:0,date:'',statusFilter:'',attendanceSearch:'',period:7,insights:null,tab:'queue',page:'',items:[],photos:[],overview:null,session:null};
 let busy=false,selectedForm,noticeTimer,paintVersion=0,transitionVersion=0;
 const isAdmin=()=>state.session.user?.role==='admin';
-const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function notice(message,error=false) {
   const toast=$('#toast');
   toast.textContent=message;
@@ -17,24 +34,37 @@ function notice(message,error=false) {
   clearTimeout(noticeTimer);
   noticeTimer=setTimeout(()=>{toast.className='';},4200);
 }
+const reveals=new IntersectionObserver(entries=>{
+  for(const entry of entries) {
+    if(!entry.isIntersecting) continue;
+    entry.target.classList.add('revealed');
+    reveals.unobserve(entry.target);
+  }
+},{threshold:.08});
+function watchSections(){
+  reveals.disconnect();
+  if(document.documentElement.dataset.motion==="off") return;
+  for(const item of root.querySelectorAll('.guide-grid article,.week-board,.ops-panel,.quick-grid')) {
+    item.classList.add('reveal-ready');
+    reveals.observe(item);
+  }
+}
 function animateSetup() {
-  const tiles=Array.from({length:96},(_,i)=>`<i style="--delay:${Math.floor(Math.random()*155)}ms" class="${i%13===0?'accent':''}"></i>`).join('');
-  overlay.innerHTML='<div class="tiles">'+tiles+'</div><span class="loader mono"><i></i><strong>LOADING...</strong><small>Menyiapkan portal ELITE</small></span>';
+  overlay.innerHTML='<div class="route-meter"><i></i></div><span class="route-label"></span>';
 }
 async function transition(task,first=false) {
   const current=++transitionVersion;
-  if(reduced.matches) return task();
-  overlay.className=first?'cover instant':'cover';
-  if(!first) await wait(225);
-  if(current!==transitionVersion) return;
-  overlay.className='cover loading';
-  const started=performance.now();
+  if(document.documentElement.dataset.motion==="off") return task();
+  overlay.querySelector('.route-label').textContent=first?'Membuka ELITE':('Membuka '+(pages.find(p=>p[0]===state.page)?.[1]||'halaman'));
+  overlay.className='route-loading';
+  const previous=root.querySelector('#main');
+  if(!first) previous?.animate([{opacity:1},{opacity:.72}],{duration:130,fill:'none'});
   try { await task(); }
   finally {
-    await wait(Math.max(0,450-(performance.now()-started)));
-    if(current===transitionVersion) {
-      overlay.className='uncover';
-      setTimeout(()=>{ if(current===transitionVersion) overlay.className=''; },340);
+    if(current===transitionVersion){
+      const content=root.querySelector('#main');
+      content?.animate([{opacity:.55,transform:'translateY(14px)'},{opacity:1,transform:'none'}],{duration:340,easing:'cubic-bezier(.2,.8,.2,1)'});
+      setTimeout(()=>{if(current===transitionVersion) overlay.className='';},420);
     }
   }
 }
@@ -88,6 +118,7 @@ async function paint({replace=false,append=false}={}) {
   state.photos=photos||[];
   if(replace||!$('#main',root)||!$('.layout',root)) root.innerHTML=shell(state.session.user,state.session.demo,page);
   $('#main').innerHTML=output;
+  watchSections();
   if(canLoadMore===false) $('.more-report')?.remove();
   if(page==='absensi') drawAttendance();
 }
@@ -204,6 +235,7 @@ function syncTimes() {
 }
 function renderAccount(mode) {
   root.innerHTML=login(state.session.demo,mode);
+  watchSections();
 }
 root.addEventListener('submit',async event=>{
   const form=event.target;
@@ -376,5 +408,6 @@ setInterval(async()=>{
   }
 },12000);
 animateSetup();
+applyMotion();
 transition(()=>getSession(true),true)
   .catch(error=>{overlay.className='uncover';root.innerHTML=empty('Portal gagal dimuat. Muat ulang halaman.');notice(error.message,true);});
