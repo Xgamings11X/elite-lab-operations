@@ -15,7 +15,8 @@ import { registerOperations } from './operations.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 export async function createApp(env=process.env,demo=false) {
-  const url=new URL(env.APP_URL || 'http://localhost:4173');
+  const productionDomain = !demo && env.VERCEL_PROJECT_PRODUCTION_URL;
+  const url = new URL(env.APP_URL || (productionDomain ? 'https://' + productionDomain : 'http://localhost:4173'));
   const host=env.HOST||'127.0.0.1';
   const loopback=['localhost','127.0.0.1','[::1]'].includes(url.hostname);
   if (url.protocol!=='https:' && !(url.protocol==='http:' && loopback)) throw Error('APP_URL harus HTTPS di luar loopback.');
