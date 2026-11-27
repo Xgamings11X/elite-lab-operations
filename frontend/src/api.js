@@ -4,6 +4,7 @@ export async function api(path,method='GET',body) {
     headers:body && !multipart?{'Content-Type':'application/json'}:undefined,
     body:body?(multipart?body:JSON.stringify(body)):undefined});
   if(response.status===204) return null;
+  if(!response.headers.get('content-type')?.includes('application/json')) throw new Error('Layanan anggota sementara tidak tersedia. Coba lagi sebentar.');
   const data=await response.json();
   if(!response.ok) throw new Error(data.error || data.message || 'Permintaan gagal.');
   return data;

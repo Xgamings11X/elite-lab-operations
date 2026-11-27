@@ -1,9 +1,8 @@
 import { readFile } from 'node:fs/promises';
-import { PGlite } from '@electric-sql/pglite';
 import pg from 'pg';
 
 export async function database(url) {
-  const client = url ? new pg.Pool({ connectionString: url }) : new PGlite();
+  const client = url ? new pg.Pool({ connectionString: url }) : new (await import('@electric-sql/pglite')).PGlite();
   const schema = await readFile(process.cwd()+'/database/schema.sql', 'utf8');
   if (url) await client.query(schema);
   else await client.exec(schema);

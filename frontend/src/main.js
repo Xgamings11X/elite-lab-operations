@@ -6,23 +6,10 @@ import { commandLinks,recentActivity,trendChart } from './operations-view.js';
 const $=(selector,el=document)=>el.querySelector(selector);
 const root=$('#app'),dialog=$('#dialog'),overlay=$('#transition');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-const motionControl=document.querySelector('#motion-control');
-let preference;
-try {preference=localStorage.getItem('elite-motion');} catch {}
 function applyMotion(){
-  const enabled=preference?preference==='on':!reduced.matches;
-  document.documentElement.dataset.motion=enabled?'on':'off';
-  motionControl.hidden=false;
-  motionControl.textContent=enabled?'Animasi aktif':'Aktifkan animasi';
-  motionControl.setAttribute('aria-pressed',String(enabled));
-  if(enabled) watchSections();
-  else {reveals.disconnect();overlay.className='';}
+  document.documentElement.dataset.motion=reduced.matches?'calm':'on';
+  watchSections();
 }
-motionControl.onclick=()=>{
-  preference=document.documentElement.dataset.motion==='on'?'off':'on';
-  try {localStorage.setItem('elite-motion',preference);} catch {}
-  applyMotion();
-};
 reduced.addEventListener('change',applyMotion);
 const state={day:0,date:'',statusFilter:'',attendanceSearch:'',period:7,insights:null,tab:'queue',page:'',items:[],photos:[],overview:null,session:null};
 let busy=false,selectedForm,noticeTimer,paintVersion=0,transitionVersion=0;
@@ -43,8 +30,8 @@ const reveals=new IntersectionObserver(entries=>{
 },{threshold:.08});
 function watchSections(){
   reveals.disconnect();
-  if(document.documentElement.dataset.motion==="off") return;
-  for(const item of root.querySelectorAll('.guide-grid article,.week-board,.ops-panel,.quick-grid')) {
+  if(reduced.matches) return;
+  for(const item of root.querySelectorAll('.guide-grid article,.week-board,.ops-panel,.quick-grid,.panel,.report,.page-head')) {
     item.classList.add('reveal-ready');
     reveals.observe(item);
   }
@@ -54,16 +41,16 @@ function animateSetup() {
 }
 async function transition(task,first=false) {
   const current=++transitionVersion;
-  if(document.documentElement.dataset.motion==="off") return task();
+
   overlay.querySelector('.route-label').textContent=first?'Membuka ELITE':('Membuka '+(pages.find(p=>p[0]===state.page)?.[1]||'halaman'));
   overlay.className='route-loading';
   const previous=root.querySelector('#main');
-  if(!first) previous?.animate([{opacity:1},{opacity:.72}],{duration:130,fill:'none'});
+  if(!first && !reduced.matches) previous?.animate([{opacity:1},{opacity:.72}],{duration:130,fill:'none'});
   try { await task(); }
   finally {
     if(current===transitionVersion){
       const content=root.querySelector('#main');
-      content?.animate([{opacity:.55,transform:'translateY(14px)'},{opacity:1,transform:'none'}],{duration:340,easing:'cubic-bezier(.2,.8,.2,1)'});
+      content?.animate(reduced.matches?[{opacity:.78},{opacity:1}]:[{opacity:.55,transform:'translateY(14px)'},{opacity:1,transform:'none'}],{duration:reduced.matches?180:340,easing:'cubic-bezier(.2,.8,.2,1)'});
       setTimeout(()=>{if(current===transitionVersion) overlay.className='';},420);
     }
   }
@@ -410,4 +397,4 @@ setInterval(async()=>{
 animateSetup();
 applyMotion();
 transition(()=>getSession(true),true)
-  .catch(error=>{overlay.className='uncover';root.innerHTML=empty('Portal gagal dimuat. Muat ulang halaman.');notice(error.message,true);});
+  .catch(error=>{overlay.className='';state.session={user:null,demo:false};renderAccount('signup');notice('Koneksi ke layanan anggota sedang terganggu.',true);});

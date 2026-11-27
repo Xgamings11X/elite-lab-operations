@@ -21,9 +21,9 @@ export async function createApp(env=process.env,demo=false) {
   const loopback=['localhost','127.0.0.1','[::1]'].includes(url.hostname);
   if (url.protocol!=='https:' && !(url.protocol==='http:' && loopback)) throw Error('APP_URL harus HTTPS di luar loopback.');
   if (demo && (host!=='127.0.0.1'||!loopback)) throw Error('Demo hanya untuk loopback.');
-  if (!demo && (!env.DATABASE_URL || !env.BOOTSTRAP_ADMIN_EMAIL?.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) || (env.BOOTSTRAP_ADMIN_PASSWORD?.length??0)<10 || env.BOOTSTRAP_ADMIN_PASSWORD.length>128 || (env.DEVICE_TOKEN?.length??0)<32)) throw Error('Lengkapi DATABASE_URL, email dan kata sandi admin (10–128 karakter) dan token perangkat (min. 32 karakter).');
+  if (!demo && (!env.DATABASE_URL || !env.BOOTSTRAP_ADMIN_EMAIL?.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) || (env.BOOTSTRAP_ADMIN_PASSWORD?.length??0)<10 || env.BOOTSTRAP_ADMIN_PASSWORD.length>128)) throw Error('Lengkapi DATABASE_URL, email dan kata sandi admin (10–128 karakter).');
   const cfg={demo,url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C1-LAB-01',
-    deviceToken:demo?'demo-local-device-token':env.DEVICE_TOKEN,
+    deviceToken:demo?'demo-local-device-token':(env.DEVICE_TOKEN?.length>=32?env.DEVICE_TOKEN:null),
     storage: demo?await mkdtemp(join(tmpdir(),'elite-demo-')):resolve(env.STORAGE_DIR||join(root,'storage')),root};
   const storageFromDist=relative(join(root,'dist'),cfg.storage);
   if (!demo && !isAbsolute(storageFromDist) && !/^\.\.(?:[\\/]|$)/.test(storageFromDist)) throw Error('Lokasi foto harus di luar folder dist.');

@@ -146,4 +146,7 @@ td small {white-space:normal}
  @keyframes core-float{from{transform:translateY(5px) rotate(-10deg)}to{transform:translateY(-6px) rotate(6deg)}}
 }
 
-#motion-control:not([hidden]){position:fixed;bottom:12px;left:12px;z-index:6;display:flex;align-items:center;gap:7px;border:1px solid #8c8176;border-radius:24px;padding:7px 12px;background:#161d2e;color:#fff;font-size:.78rem;cursor:pointer}#motion-control::before{content:"";border:5px solid transparent;border-left:8px solid #ffac62;border-right:0}html[data-motion="on"] #motion-control::before{width:7px;height:9px;border:solid #ffac62;border-width:0 2px}
+html[data-motion="calm"] .route-meter i{width:100%;animation:quiet-light .9s ease-in-out infinite alternate}
+html[data-motion="calm"] :is(.club-core,.page-head,.auth-panel){animation:quiet-entry .28s ease-out}
+@keyframes quiet-light{from{opacity:.5}to{opacity:1}}
+@keyframes quiet-entry{from{opacity:.75}to{opacity:1}}
