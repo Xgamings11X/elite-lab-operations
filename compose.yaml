@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: elite
+      POSTGRES_USER: elite
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Tentukan POSTGRES_PASSWORD di .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - elite-pg:/var/lib/postgresql/data
+volumes:
+  elite-pg:
