@@ -83,6 +83,16 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
   assert.equal((await scan({body:{event_id:randomUUID()}})).result.type,'OUT');
   assert.equal((await scan({body:{event_id:randomUUID()}})).result.type,'UNCHANGED');
 
+  const roster=await call('/attendance?roster=true&date='+today,{cookie:viewer});
+  assert.ok(roster.result.some(row=>row.status==='unmarked'));
+  const correction={member_id:memberId,date:today,status:'absent',check_in_time:null,check_out_time:null,notes:'Dikoreksi setelah pengecekan.'};
+  assert.equal((await call('/attendance',{method:'PUT',cookie:viewer,body:correction})).status,403);
+  assert.equal((await call('/attendance',{method:'PUT',cookie:admin,body:correction})).status,200);
+  const updated=(await call('/attendance?date='+today,{cookie:viewer})).result.find(row=>row.member_id===memberId);
+  assert.equal(updated.status,'absent');
+  assert.equal(updated.check_in_time,null);
+  assert.equal(updated.check_out_time,null);
+  assert.equal((await scan({body:{event_id:randomUUID()}})).result.type,'UNCHANGED');
   const invited=await call('/admin/users',{method:'POST',cookie:admin,body:{email:'undangan.uji@gmail.com',role:'viewer'}});
   assert.equal(invited.status,201);
   assert.equal((await call('/admin/users/'+invited.result.id,{method:'DELETE',cookie:admin})).status,204);
@@ -92,6 +102,6 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
   assert.equal((await call('/overview',{cookie:viewer})).status,401);
   const audit=await call('/admin/audit',{cookie:admin});
   assert.equal(audit.status,200);
-  assert.deepEqual(audit.result.map(event=>event.action),['access_revoked','access_revoked','access_granted','attendance_saved','fingerprint_linked','report_revision']);
+  assert.deepEqual(audit.result.map(event=>event.action),['access_revoked','access_revoked','access_granted','attendance_saved','attendance_saved','fingerprint_linked','report_revision']);
   assert.ok(audit.result.every(event=>event.actor_email==='admin@gmail.com'));
 });

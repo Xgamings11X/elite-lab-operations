@@ -4,7 +4,7 @@ export async function seedDemo(db,device) {
   const admin = await first(db,"INSERT INTO users(email,name,role) VALUES ('admin@gmail.com','Admin ELITE','admin') RETURNING id");
   const viewer = await first(db,"INSERT INTO users(email,name,role) VALUES ('viewer@gmail.com','Pelihat ELITE','viewer') RETURNING id");
   const names = ['Aditya Pratama','Nabila Rahma','Rizky Ramadhan','Siti Aulia','Fajar Maulana','Dewi Anggraini','Bagas Saputra','Rafi Hidayat','Intan Permata','Alvin Setiawan','Keisha Putri','Dimas Nugroho','Citra Amelia','Farhan Rayhan','Aisyah Khairani','Naufal Akbar','Gita Safitri','Reza Firmansyah','Kevin Putra','Alika Salsabila','Bayu Ramadan','Arya Mahendra','Lulu Maharani','Daffa Rizaldi'];
-  const divisions = ['Programming','Elektronik','Mekanik'];
+  const divisions = ['Rekayasa Perangkat Lunak','Teknik Elektronika Industri','Teknik Pemesinan'];
   const classes = ['XI RPL 1','XI TEI 2','X TPM 1','XI RPL 2','X TEI 1','XI TPM 1'];
   const today = localDate().date;
   for (let i=0;i<names.length;i++) {
@@ -25,7 +25,7 @@ export async function seedDemo(db,device) {
   }
   await rows(db,'UPDATE devices SET last_seen=now() + interval \'1 day\' WHERE id=$1',device);
   await rows(db,`INSERT INTO reports (kind,date,division,caption,photo_key,demo_asset,verification_status,submitted_by_email) VALUES
-    ('dokumentasi',$1,'Mekanik','Perakitan prototipe rover di meja kerja','demo-rover',true,'pending','admin@gmail.com'),
+    ('dokumentasi',$1,'Teknik Pemesinan','Perakitan prototipe rover di meja kerja','demo-rover',true,'pending','admin@gmail.com'),
     ('piket',$1,null,'Pengecekan dan penataan meja kerja lab','demo-workbench',true,'approved','admin@gmail.com')`,today);
   return { admin:admin.id,viewer:viewer.id };
 }

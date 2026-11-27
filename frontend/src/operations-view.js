@@ -4,7 +4,6 @@ const locale='id-ID',zone='Asia/Jakarta';
 const shortDate=new Intl.DateTimeFormat(locale,{day:'numeric',month:'short',timeZone:zone});
 const dayName=new Intl.DateTimeFormat(locale,{weekday:'short',timeZone:zone});
 const eventDate=new Intl.DateTimeFormat(locale,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:zone});
-const timeOnly=new Intl.DateTimeFormat(locale,{hour:'2-digit',minute:'2-digit',timeZone:zone});
 const asDate=value=>new Date(value+'T12:00:00+07:00');
 const detailLink=(label,page)=>`<a class="ops-link" href="#/${page}">${label}${icon('chevron-right',16)}</a>`;
 const symbols={
@@ -12,7 +11,7 @@ const symbols={
   activity_report:['camera','Laporan kegiatan','plum'],picket_report:['clipboard-check','Bukti piket','honey'],
   attendance_saved:['fingerprint','Absensi manual disimpan','mint'],
   report_approved:['circle-check','Laporan disetujui','mint'],report_revision:['file-check-2','Revisi diminta','honey'],
-  fingerprint_linked:['fingerprint','Fingerprint ditautkan','blue'],fingerprint_unlinked:['fingerprint','Fingerprint dilepas','blue'],
+  fingerprint_linked:['fingerprint','ID presensi ditautkan','blue'],fingerprint_unlinked:['fingerprint','ID presensi dilepas','blue'],
   access_granted:['shield-check','Akses Gmail aktif','plum'],access_revoked:['shield-check','Akses Gmail dicabut','honey'],
 };
 export const modules=[
@@ -23,13 +22,6 @@ export const modules=[
 ];
 const tile=(glyph,theme,size=22)=>`<span class="ops-icon ${theme}">${icon(glyph,size)}</span>`;
 
-export function deviceSummary(device) {
-  const status=device.online?'Terhubung':'Offline';
-  const heartbeat=device.last_seen?timeOnly.format(new Date(device.last_seen)).replace('.',':')+' WIB':'Belum diterima';
-  return `<div class="device-console"><div class="console-top"><span>${icon('radio',17)} Perangkat lab</span><span class="console-state ${device.online?'is-online':''}"><i></i> ${status}</span></div>
-    <div class="console-main"><span class="console-icon">${icon(device.online?'fingerprint':'wifi-off',33)}</span><div><strong>ESP32-C1</strong><small>${h(device.id)}</small></div></div>
-    <div class="console-foot"><span>Heartbeat terakhir</span><strong>${heartbeat}</strong></div></div>`;
-}
 export function metricCards(o,admin) {
   const {present,members,pending}=o.summary;
   const percent=members?Math.round(present/members*100):0;

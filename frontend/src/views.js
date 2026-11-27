@@ -1,6 +1,6 @@
 import eliteLogo from './elite-logo.png';
-import { badge,btn,days,divisions,empty,formatDate,h,icon,initials,reports,roster,shortTime,tags } from './ui.js';
-import { deviceSummary,metricCards,operationsBoard,quickNav,recentActivity,reviewQueue } from './operations-view.js';
+import { badge,btn,days,memberStudy,empty,formatDate,h,icon,initials,reports,roster,shortTime,tags } from './ui.js';
+import { metricCards,operationsBoard,quickNav,recentActivity,reviewQueue } from './operations-view.js';
 
 export const pages=[
   ['beranda','Beranda','house'],['dashboard','Dashboard','layout-dashboard'],['absensi','Absensi Anggota','fingerprint'],
@@ -9,6 +9,13 @@ export const pages=[
 export const availablePages=admin=>admin?pages:pages.slice(0,5);
 const logo=()=>'<img class="elite-wordmark" src="'+eliteLogo+'" width="540" height="180" alt="ELITE — Electronic Innovation Center">';
 const link=(slug,label,glyph,current)=>'<a href="#/'+slug+'" '+(slug===current?'aria-current="page"':'')+'>'+icon(glyph,18)+'<span>'+label+'</span>'+(slug===current?'<i></i>':'')+'</a>';
+function portalFooter(user) {
+  return `<footer class="club-footer"><div class="footer-grid"><section><a class="footer-brand" href="#/beranda">${logo()}</a><p>Ekstrakurikuler robotik SMKN 2 Surabaya. Ruang anggota untuk mencatat kehadiran, berbagi tugas piket, dan mendokumentasikan kegiatan.</p></section>
+    <nav aria-label="Navigasi footer"><h2>Navigasi</h2>${availablePages(user.role==='admin').map(([route,title])=>`<a href="#/${route}">${title}</a>`).join('')}</nav>
+    <section><h2>Temui kami</h2><address>Jl. Tentara Genie Pelajar No. 26, Petemon, Kecamatan Sawahan, Kota Surabaya, Jawa Timur 60252</address><a class="contact-link" href="https://www.google.com/maps/search/?api=1&amp;query=SMKN+2+Surabaya+Jl.+Tentara+Genie+Pelajar+No.+26" target="_blank" rel="noopener">Buka Google Maps ${icon('arrow-up-right',15)}</a></section>
+    <section><h2>Hubungi ELITE</h2><a class="footer-social" href="mailto:elitedrive10@gmail.com">${icon('mail',17)} elitedrive10@gmail.com</a><a class="footer-social" href="https://www.instagram.com/official_elite10/" target="_blank" rel="noopener">${icon('camera',17)} @official_elite10</a></section></div>
+    <div class="footer-base">© ${new Date().getFullYear()} Electronic Innovation Center <span>SMKN 2 Surabaya</span></div></footer>`;
+}
 export function shell(user,demo,current) {
   const label=pages.find(x=>x[0]===current)[1];
   return `<div class="layout">
@@ -16,15 +23,13 @@ export function shell(user,demo,current) {
       <p class="nav-caption mono">RUANG KERJA</p>
       <nav aria-label="Navigasi utama">${pages.slice(0,5).map(x=>link(...x,current)).join('')}</nav>
       ${user.role==='admin'?'<p class="nav-caption mono manage">MANAJEMEN</p><nav aria-label="Manajemen">'+link(...pages[5],current)+'</nav>':''}
-      <div class="side-bottom"><div class="mini-device"><span class="mini-cpu">${icon('cpu',18)}</span><div><strong>ESP32-C1</strong><small id="side-device">Memuat status</small></div></div>
-      <div class="side-footer">Robotik SMKN 2 Surabaya</div></div>
     </aside>
     <div class="workspace"><header class="topbar">
       <button class="menu icon-button" aria-controls="sidebar" aria-expanded="false" data-action="menu" aria-label="Buka menu">${icon('menu')}</button>
       <a class="mobile-brand" href="#/beranda" aria-label="ELITE Beranda">${logo()}</a><div class="crumb"><span>Ruang kerja</span>${icon('chevron-right',14)}<strong>${label}</strong></div>
       <div class="top-right"><button class="search-trigger" type="button" data-action="command" aria-label="Cari halaman">${icon('search',17)}<span>Cari halaman</span><kbd>${/Mac/i.test(navigator.platform)?'⌘':'Ctrl'} K</kbd></button>
       ${demo?'<button class="demo-label" data-action="roles" title="Ganti peran demo">Demo</button>':''}<details class="account"><summary><span class="profile-avatar">${h(initials(user.name||user.email))}</span><span class="account-text"><strong>${h(user.name||user.email)}</strong><small>${user.role==='admin'?'Admin':'Pelihat'}</small></span>${icon('chevron-down',15)}</summary><div class="account-menu"><span>${h(user.email)}</span>${demo?btn('Ganti peran demo','roles','outline','users'):''}${btn('Keluar','logout','outline','log-out')}</div></details></div>
-    </header><main id="main" tabindex="-1" class="content"></main><footer class="workspace-footer"><span>Electronic Innovation Center</span><span>Robotik SMKN 2 Surabaya</span></footer></div></div>`;
+    </header><main id="main" tabindex="-1" class="content"></main>${portalFooter(user)}</div></div>`;
 }
 
 export function login(demo,error) {
@@ -37,38 +42,32 @@ const section=(title,subtitle,action='')=>`<div class="section-head"><div><h2>${
 const heading=(label,title,subtitle,action='')=>`<div class="page-head"><div><p class="eyebrow"><i></i> ${label}</p><h1>${title}</h1><p>${subtitle}</p></div>${action}</div>`;
 const more=(label,slug)=>`<a class="ops-link" href="#/${slug}">${label} ${icon('chevron-right',16)}</a>`;
 
-export function home(o,admin,insights,period) {
-  return `<section class="home-hero">
-    <div><p class="home-date mono">${icon('calendar-days',16)} ${formatDate(o.today,true)}</p>
-    <h1>Operasional <span>Lab.</span></h1><p class="home-lede">Pantau kehadiran, piket, dan kegiatan robotik SMKN 2 Surabaya.</p>
-    <div class="home-actions"><a class="btn primary" href="#/dashboard">${icon('layout-dashboard',18)} Buka Dashboard</a></div></div>
-    <div data-device-console>${deviceSummary(o.device)}</div>
-  </section>
-  <div class="home-section"><h2>Akses Cepat</h2>${quickNav(admin)}</div>
-  <div class="home-section"><h2>Ringkasan Hari Ini</h2>${metricCards(o,admin)}</div>
-  ${operationsBoard(o,insights,period)}`;
+export function home(o,admin) {
+  return `<section class="club-hero"><div class="club-intro"><p class="club-kicker"><i></i> Robotik SMKN 2 Surabaya</p><h1>Electronic<br>Innovation <em>Center.</em></h1><p class="club-lede">Ruang anggota ELITE untuk mengikuti kegiatan, melihat jadwal piket, dan menyimpan cerita dari lab.</p><a class="btn primary" href="#/dashboard">${icon('layout-dashboard',17)} Buka dashboard</a></div>
+    <div class="club-emblem" aria-hidden="true"><i class="orbit orbit-one"></i><i class="orbit orbit-two"></i><i class="orbit orbit-three"></i><div class="club-core">${icon('zap',74)}</div></div>
+    <div class="club-dateline">${icon('calendar-days',16)} ${formatDate(o.today,true)}</div></section>
+    <section class="home-section club-directory"><h2>Jelajahi portal</h2>${quickNav(admin)}</section>`;
 }
 export function dashboard(o,user,queue,insights,period) {
   const isAdmin=user.role==='admin';
-  const title=heading('OPERASIONAL','Dashboard',isAdmin?'Pantau absensi, antrean verifikasi, dan status perangkat.':'Pantau absensi, petugas piket, dan aktivitas lab.',`<span class="access-badge mono">${icon(isAdmin?'shield-check':'user-round',17)} ${isAdmin?'Admin':'Pelihat'}</span>`);
+  const title=heading('OPERASIONAL','Dashboard',isAdmin?'Ringkasan kehadiran, piket hari ini, dan laporan yang menunggu pemeriksaan.':'Pantau absensi, petugas piket, dan aktivitas lab.',`<span class="access-badge mono">${icon(isAdmin?'shield-check':'user-round',17)} ${isAdmin?'Admin':'Pelihat'}</span>`);
   const queueSection=isAdmin?`<section class="ops-panel dashboard-queue"><div class="ops-panel-head"><div><h2>Antrean Verifikasi Foto</h2><p>Cocokkan laporan dengan absensi dan jadwal piket.</p></div>${more('Panel Admin','admin')}</div>${reviewQueue(queue)}</section>`:'';
-  const tools=isAdmin?`<div class="dual admin-shortcuts"><section class="ops-panel"><h2>Pendaftaran Sidik Jari</h2><p>${o.summary.unenrolled} anggota aktif belum ditautkan ke ID sensor.</p>${btn('Kelola fingerprint','adminTab:members','outline','fingerprint')}</section><section class="ops-panel"><h2>Akses Gmail</h2><p>Aktifkan akses untuk admin atau pelihat.</p>${btn('Undang lewat Gmail','invite','outline','mail')}</section></div>`:'';
-  return title+`<div class="dashboard-top"><div>${metricCards(o,isAdmin)}</div><div data-device-console>${deviceSummary(o.device)}</div></div>`+queueSection+operationsBoard(o,insights,period)+tools;
+  return title+metricCards(o,isAdmin)+queueSection+operationsBoard(o,insights,period);
 }
 
 export function attendanceTable(items,isAdmin=false) {
-  return items.length?`<div class="table-wrap"><table><thead><tr><th>Anggota</th><th>Divisi</th><th>Metode</th><th>Masuk</th><th>Pulang</th><th>Status</th>${isAdmin?'<th>Tindakan</th>':''}</tr></thead>
-  <tbody>${items.map(a=>`<tr><td><div class="table-person"><span class="avatar">${h(initials(a.full_name))}</span><span><strong>${h(a.full_name)}</strong><small>${h(a.class_name)}${a.notes?' · '+h(a.notes):''}</small></span></div></td><td>${h(a.division)}</td><td>${a.method==='manual'?'Manual Admin':'Fingerprint ESP32-C1'}</td><td class="mono">${shortTime(a.check_in_time)}</td><td class="mono">${shortTime(a.check_out_time)}</td><td>${badge(a.status)}</td>${isAdmin?'<td>'+btn('Edit','attendance:'+a.member_id,'outline')+'</td>':''}</tr>`).join('')}</tbody></table></div>`:empty('Belum ada catatan absensi untuk tanggal ini.');
+  return items.length?`<div class="table-wrap attendance-wrap"><table><thead><tr><th>Anggota</th><th>Masuk</th><th>Pulang</th><th>Status</th>${isAdmin?'<th>Tindakan</th>':''}</tr></thead>
+  <tbody>${items.map(a=>`<tr><td><div class="table-person"><span class="avatar">${h(initials(a.full_name))}</span><span><strong>${h(a.full_name)}</strong><small>${h(memberStudy(a))}${a.notes?' · '+h(a.notes):''}</small></span></div></td><td class="mono">${shortTime(a.check_in_time)}</td><td class="mono">${shortTime(a.check_out_time)}</td><td>${badge(a.status)}</td>${isAdmin?'<td>'+btn('Koreksi','attendance:'+a.member_id,'outline')+'</td>':''}</tr>`).join('')}</tbody></table></div>`:empty('Belum ada catatan absensi untuk tanggal ini.');
 }
 export function attendance(state,items,isAdmin) {
-  return heading('PRESENSI','Absensi Anggota','Rekap kehadiran anggota dan sinkronisasi fingerprint.',isAdmin?btn('Input manual','attendance','primary','plus'):'')+
-  `<section class="panel"><div class="filter"><label>Tanggal <input id="attendance-date" type="date" value="${state.date}"></label><label>Cari anggota <input id="attendance-search" type="search" placeholder="Nama atau kelas" aria-label="Cari anggota" value="${h(state.attendanceSearch)}"></label><label>Divisi <select id="attendance-division"><option value="">Semua divisi</option>${tags(divisions)}</select></label><span id="attendance-count" class="mono"></span></div><div id="attendance-list">${attendanceTable(items,isAdmin)}</div></section>`;
+  return heading('PRESENSI','Absensi Anggota','Periksa kehadiran anggota per tanggal dan lihat catatan masuk atau pulang.',isAdmin?btn('Catat kehadiran','attendance','primary','plus'):'')+
+  `<section class="panel"><div class="filter"><label>Tanggal <input id="attendance-date" type="date" value="${state.date}"></label><label>Cari anggota <input id="attendance-search" type="search" placeholder="Nama, kelas, atau jurusan" aria-label="Cari anggota" value="${h(state.attendanceSearch)}"></label><label>Status <select id="attendance-status"><option value="">Semua status</option><option value="present">Hadir</option><option value="absent">Tidak hadir</option><option value="unmarked">Belum tercatat</option><option value="excused">Izin</option><option value="competition">Dispensasi</option></select></label><span id="attendance-count" class="mono"></span></div><div id="attendance-list">${attendanceTable(items,isAdmin)}</div></section>`;
 }
 export function picket(state,items,photos,isAdmin) {
   return heading('LAB ROBOTIK','Jadwal Piket','Lihat jadwal petugas lab dan bukti foto piket.',isAdmin?btn('Unggah bukti','upload:piket','primary','camera'):'')+
   `<section class="panel"><div class="tabs" aria-label="Hari piket">${days.map((day,i)=>`<button data-action="day:${i+1}" aria-pressed="${state.day===i+1}">${day}</button>`).join('')}</div>
     ${section('Petugas hari '+days[state.day-1],items.length+' anggota terjadwal',isAdmin?btn('Tambah petugas','picket-add','outline','plus'):'')}
-    ${isAdmin&&items.length?'<ul class="roster editable">'+items.map(x=>`<li><span class="avatar">${h(initials(x.full_name))}</span><span><strong>${h(x.full_name)}</strong><small>${h(x.class_name)} · ${h(x.division)}</small></span>${btn('Hapus','picket-remove:'+x.id,'outline')}</li>`).join('')+'</ul>':roster(items)}</section>`+
+    ${isAdmin&&items.length?'<ul class="roster editable">'+items.map(x=>`<li><span class="avatar">${h(initials(x.full_name))}</span><span><strong>${h(x.full_name)}</strong><small>${h(memberStudy(x))}</small></span>${btn('Hapus','picket-remove:'+x.id,'outline')}</li>`).join('')+'</ul>':roster(items)}</section>`+
     section('Bukti foto piket','Riwayat foto petugas dan kondisi lab.')+reports(photos,isAdmin)+moreReports(photos);
 }
 const moreReports=items=>items.length>=24?`<div class="more-report">${btn('Muat laporan lainnya','more','outline')}</div>`:'';
@@ -76,13 +75,13 @@ export function gallery(items,isAdmin) {
   return heading('GALERI LAB','Dokumentasi Foto','Arsip kegiatan dan sesi praktik di lab ELITE.',isAdmin?btn('Unggah dokumentasi','upload:dokumentasi','primary','camera'):'')+reports(items,isAdmin)+moreReports(items);
 }
 export function adminPanel(tab,data,user) {
-  const tabs=[['queue','Verifikasi Foto'],['members','Anggota & Fingerprint'],['users','Akses Gmail'],['audit','Riwayat Perubahan']];
+  const tabs=[['queue','Verifikasi Foto'],['members','Daftar Anggota'],['users','Akses Gmail'],['audit','Riwayat Perubahan']];
   const head=heading('MANAJEMEN','Panel Admin','Kelola verifikasi, data anggota, dan akses portal.')+
     '<div class="tabs admin-tabs" aria-label="Bagian admin">'+tabs.map(([key,label])=>`<button data-action="adminTab:${key}" aria-pressed="${tab===key}">${label}</button>`).join('')+'</div>';
   if(tab==='queue') return head+section('Antrean Foto','Laporan piket dan dokumentasi yang menunggu pemeriksaan.')+'<div class="ops-panel">'+reviewQueue(data)+'</div>'+moreReports(data);
   if(tab==='audit') return head+section('Riwayat Perubahan','30 tindakan admin terbaru yang tercatat.')+'<div class="ops-panel">'+recentActivity(data,true)+'</div>';
-  if(tab==='members') return head+section('Anggota & Fingerprint','Tautkan slot sensor ESP32-C1 ke profil anggota.',btn('Tambah anggota','member','primary','plus'))+
-    (data.length?`<div class="table-wrap panel"><table><thead><tr><th>Anggota</th><th>Divisi</th><th>ID Sensor</th><th>Tindakan</th></tr></thead><tbody>${data.map(m=>`<tr><td><strong>${h(m.full_name)}</strong><small>${h(m.class_name)}</small></td><td>${h(m.division)}</td><td class="mono">${m.fingerprint_id??'Belum terdaftar'}</td><td>${btn('Kelola ID','link:'+m.id,'outline','fingerprint')}</td></tr>`).join('')}</tbody></table></div>`:empty('Belum ada anggota.'));
+  if(tab==='members') return head+section('Daftar Anggota','Kelola profil, jurusan, dan ID presensi anggota.',btn('Tambah anggota','member','primary','plus'))+
+    (data.length?`<div class="table-wrap panel"><table><thead><tr><th>Anggota</th><th>ID presensi</th><th>Tindakan</th></tr></thead><tbody>${data.map(m=>`<tr><td><strong>${h(m.full_name)}</strong><small>${h(memberStudy(m))}</small></td><td class="mono">${m.fingerprint_id??'Belum terdaftar'}</td><td>${btn('Kelola ID','link:'+m.id,'outline','fingerprint')}</td></tr>`).join('')}</tbody></table></div>`:empty('Belum ada anggota.'));
   return head+section('Daftar akses Gmail','Aktifkan Gmail yang diizinkan masuk.',btn('Invite Gmail','invite','primary','mail'))+
     `<div class="table-wrap panel"><table><thead><tr><th>Gmail</th><th>Peran</th><th>Akses</th><th>Tindakan</th></tr></thead><tbody>${data.map(u=>`<tr><td><strong>${h(u.email)}</strong><small>${h(u.name||'')}</small></td><td>${badge(u.role)}</td><td>${u.is_active?(u.signed_in?'Aktif':'Diundang'):'Dicabut'}</td><td>${u.is_active&&u.id!==user.id?btn('Cabut akses','revoke:'+u.id,'outline'):'—'}</td></tr>`).join('')}</tbody></table></div>`;
 }

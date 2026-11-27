@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS devices (
 CREATE TABLE IF NOT EXISTS members (
   id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   full_name text NOT NULL, class_name text NOT NULL,
-  division text NOT NULL CHECK (division IN ('Programming','Elektronik','Mekanik')),
+  division text NOT NULL,
   fingerprint_id integer CHECK (fingerprint_id BETWEEN 1 AND 65535),
   fingerprint_device text REFERENCES devices(id),
   is_active boolean NOT NULL DEFAULT true,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS attendances (
   member_id integer NOT NULL REFERENCES members(id),
   date date NOT NULL, check_in_time time, check_out_time time,
   method text NOT NULL CHECK (method IN ('esp32_c1_fingerprint','manual')),
-  status text NOT NULL CHECK (status IN ('present','excused','competition')),
+  status text NOT NULL CONSTRAINT attendance_status_with_absence CHECK (status IN ('present','absent','excused','competition')),
   notes text NOT NULL DEFAULT '', last_scan_at timestamptz,
   UNIQUE(member_id,date),
   CHECK (check_out_time IS NULL OR (check_in_time IS NOT NULL AND check_out_time >= check_in_time)),
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS reports (
   id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   kind text NOT NULL CHECK (kind IN ('piket','dokumentasi')),
   date date NOT NULL,
-  division text CHECK (division IN ('Programming','Elektronik','Mekanik')),
+  division text,
   caption text NOT NULL,
   photo_key text NOT NULL UNIQUE,
   demo_asset boolean NOT NULL DEFAULT false,
@@ -81,4 +81,13 @@ CREATE TABLE IF NOT EXISTS admin_changes (
 );
 CREATE INDEX IF NOT EXISTS reports_status_date ON reports(verification_status, date DESC, id DESC);
 CREATE INDEX IF NOT EXISTS reports_kind_date ON reports(kind, date DESC, id DESC);
+ALTER TABLE members DROP CONSTRAINT IF EXISTS members_division_check;
+ALTER TABLE reports DROP CONSTRAINT IF EXISTS reports_division_check;
+DO $migration$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='attendances'::regclass AND conname='attendance_status_with_absence') THEN
+    ALTER TABLE attendances DROP CONSTRAINT IF EXISTS attendances_status_check;
+    ALTER TABLE attendances ADD CONSTRAINT attendance_status_with_absence CHECK(status IN ('present','absent','excused','competition'));
+  END IF;
+END $migration$;
 CREATE INDEX IF NOT EXISTS reports_created_at ON reports(created_at DESC);

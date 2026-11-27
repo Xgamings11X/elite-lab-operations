@@ -3,15 +3,16 @@ import '@fontsource-variable/plus-jakarta-sans/wght.css';
 import '@fontsource-variable/jetbrains-mono/wght.css';
 import './style.css';
 import './workspace.css';
+import './club.css';
 import { api,compress } from './api.js';
-import { badge,btn,empty,formatDate,h,icon,roster,tags,divisions } from './ui.js';
+import { badge,btn,empty,formatDate,h,icon,roster,memberStudy } from './ui.js';
 import { adminPanel,attendance,attendanceTable,availablePages,dashboard,gallery,home,login,pages,picket,shell } from './views.js';
-import { commandLinks,deviceSummary,recentActivity,trendChart } from './operations-view.js';
+import { commandLinks,recentActivity,trendChart } from './operations-view.js';
 
 const $=(selector,el=document)=>el.querySelector(selector);
 const root=$('#app'),dialog=$('#dialog'),overlay=$('#transition');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-const state={day:0,date:'',division:'',attendanceSearch:'',period:7,insights:null,tab:'queue',page:'',items:[],photos:[],overview:null,session:null};
+const state={day:0,date:'',statusFilter:'',attendanceSearch:'',period:7,insights:null,tab:'queue',page:'',items:[],photos:[],overview:null,session:null};
 let busy=false,selectedForm,noticeTimer,paintVersion=0,transitionVersion=0;
 const isAdmin=()=>state.session.user?.role==='admin';
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -43,15 +44,6 @@ async function transition(task,first=false) {
     }
   }
 }
-function setDevice() {
-  const el=$('#side-device');
-  if (el && state.overview) {
-    const online=state.overview.device.online;
-    el.innerHTML='<i class="'+(online?'online':'')+'"></i> '+(online?'Online':'Offline');
-    const console=$('[data-device-console]');
-    if(console) console.innerHTML=deviceSummary(state.overview.device);
-  }
-}
 function currentPage() {
   const requested=location.hash.match(/^#\/([a-z]+)$/)?.[1];
   return pages.some(([key])=>key===requested) && (requested!=='admin'||isAdmin())?requested:'beranda';
@@ -61,7 +53,7 @@ const json=(path,method,data)=>api(path,method,data);
 async function paint({replace=false,append=false}={}) {
   if(!state.session.user) return;
   const version=++paintVersion, page=state.page, admin=isAdmin(), tab=state.tab;
-  const operational=page==='beranda'||page==='dashboard';
+  const operational=page==='dashboard';
   const [overview,insights]=await Promise.all([api('/overview'),operational?api('/insights'):null]);
   if(version!==paintVersion) return;
   state.overview=overview;
@@ -70,13 +62,13 @@ async function paint({replace=false,append=false}={}) {
   state.day ||= new Date(overview.today+'T12:00:00Z').getUTCDay() || 1;
   const day=state.day;
   let output,items,photos,canLoadMore;
-  if(page==='beranda') output=home(overview,admin,insights,state.period);
+  if(page==='beranda') output=home(overview,admin);
   if(page==='dashboard') {
     const queue=admin?(await api('/reports?pending=true')).slice(0,4):[];
     output=dashboard(overview,state.session.user,queue,insights,state.period);
   }
   if(page==='absensi') {
-    items=await api('/attendance?date='+state.date);
+    items=await api('/attendance?roster=true&date='+state.date);
     output=attendance(state,items,admin);
   }
   if(page==='piket'||page==='dokumentasi'||(page==='admin'&&tab==='queue')) {
@@ -101,14 +93,13 @@ async function paint({replace=false,append=false}={}) {
   $('#main').innerHTML=output;
   if(canLoadMore===false) $('.more-report')?.remove();
   if(page==='absensi') drawAttendance();
-  setDevice();
 }
 function drawAttendance() {
-  const filter=$('#attendance-division');
+  const filter=$('#attendance-status');
   if(!filter) return;
-  filter.value=state.division;
+  filter.value=state.statusFilter;
   const search=state.attendanceSearch.trim().toLocaleLowerCase('id');
-  const visible=state.items.filter(x=>(!state.division||x.division===state.division)&&(!search||(x.full_name+' '+x.class_name).toLocaleLowerCase('id').includes(search)));
+  const visible=state.items.filter(x=>(!state.statusFilter||x.status===state.statusFilter)&&(!search||(x.full_name+' '+memberStudy(x)).toLocaleLowerCase('id').includes(search)));
   $('#attendance-list').innerHTML=attendanceTable(visible,isAdmin());
   $('#attendance-count').textContent=visible.length+' catatan';
 }
@@ -152,10 +143,10 @@ async function openAction(action,value) {
       '<p class="hint">Bagikan alamat portal kepada penerima setelah akses dibuat.</p>',persist('/admin/users','POST',x=>x),'Aktifkan akses');
   }
   if(action==='member') showDialog('Tambah anggota',field('Nama lengkap','<input name="full_name" required minlength="2" maxlength="120">')+
-    field('Kelas / Jurusan','<input name="class_name" required maxlength="50">')+field('Divisi','<select name="division">'+tags(divisions)+'</select>'),persist('/admin/members','POST',x=>x));
-  if(action==='link'&&item) showDialog('Tautkan fingerprint',`<p>${h(item.full_name)}</p>`+
-    field('ID slot di sensor','<input name="fingerprint_id" type="number" min="1" max="65535" value="'+(item.fingerprint_id??'')+'">')+
-    '<p class="hint">Daftarkan jari pada sensor terlebih dahulu. Kosongkan untuk melepas tautan.</p>',
+    field('Kelas','<input name="class_name" required maxlength="50">')+field('Jurusan','<input name="division" required maxlength="80" placeholder="Contoh: Teknik Pemesinan">'),persist('/admin/members','POST',x=>x));
+  if(action==='link'&&item) showDialog('Tautkan ID presensi',`<p>${h(item.full_name)}</p>`+
+    field('Nomor registrasi','<input name="fingerprint_id" type="number" min="1" max="65535" value="'+(item.fingerprint_id??'')+'">')+
+    '<p class="hint">Masukkan nomor registrasi anggota. Kosongkan untuk melepas tautan.</p>',
     persist('/admin/members/'+item.id+'/fingerprint','PATCH',x=>({fingerprint_id:x.fingerprint_id?Number(x.fingerprint_id):null})));
   if(action==='revoke'&&item) showDialog('Cabut akses Gmail',`<p>Akhiri semua sesi dan cabut akses <strong>${h(item.email)}</strong>?</p>`,persist('/admin/users/'+item.id,'DELETE',()=>null),'Cabut akses');
   if(action==='picket-remove'&&item) showDialog('Hapus jadwal petugas',`<p>Hapus <strong>${h(item.full_name)}</strong> dari jadwal hari ini?</p>`,persist('/picket/'+item.id,'DELETE',()=>null),'Hapus jadwal');
@@ -166,9 +157,9 @@ async function openAction(action,value) {
   if(action==='attendance') {
     const members=await api('/admin/members');
     const record=state.items.find(x=>x.member_id===Number(value));
-    showDialog(record?'Edit absensi':'Input absensi manual',field('Anggota',memberSelect(members,record?.member_id))+
-      field('Tanggal','<input type="date" name="date" required value="'+state.date+'">')+
-      field('Status','<select name="status">'+['present','excused','competition'].map((key,i)=>option(key,['Hadir','Izin','Lomba / Dispensasi'][i],key===record?.status)).join('')+'</select>')+
+    showDialog(record?'Koreksi kehadiran':'Catat kehadiran',(record?'<p class="selected-person"><strong>'+h(record.full_name)+'</strong><br>'+h(memberStudy(record))+'</p><input type="hidden" name="member_id" value="'+record.member_id+'">':field('Anggota',memberSelect(members)))+
+      field('Tanggal','<input type="date" name="date" required '+(record?'readonly ':'')+'value="'+state.date+'">')+
+      field('Status','<select name="status">'+['present','absent','excused','competition'].map((key,i)=>option(key,['Hadir','Tidak hadir','Izin','Lomba / Dispensasi'][i],key===record?.status)).join('')+'</select>')+
       '<div class="form-row">'+field('Jam masuk','<input type="time" name="check_in_time" value="'+(record?.check_in_time?.slice(0,5)||'')+'">')+
       field('Jam pulang','<input type="time" name="check_out_time" value="'+(record?.check_out_time?.slice(0,5)||'')+'">')+'</div>'+
       field('Catatan','<textarea name="notes" maxlength="400" rows="2">'+h(record?.notes)+'</textarea>'),
@@ -179,7 +170,7 @@ async function openAction(action,value) {
     const doc=value==='dokumentasi';
     showDialog(doc?'Unggah dokumentasi':'Unggah bukti piket',
       field('Tanggal kegiatan','<input name="date" type="date" required value="'+currentDate()+'">')+
-      (doc?field('Divisi','<select name="division">'+tags(divisions)+'</select>'):'')+
+      (doc?field('Jurusan','<input name="division" required maxlength="80" placeholder="Contoh: Teknik Pemesinan">'):'')+
       field('Keterangan','<textarea name="caption" required minlength="3" maxlength="500" rows="3" placeholder="Siapa yang hadir dan apa kegiatannya?"></textarea>')+
       field('Pilih file foto','<input type="file" accept="image/*" name="photo">')+
       field('Atau ambil dari kamera HP','<input type="file" accept="image/*" capture="environment" name="camera">')+
@@ -297,7 +288,7 @@ document.addEventListener('change',async event=>{
     const note=$('#modal-form')?.elements.note;
     if(note) note.required=event.target.value==='rejected';
   }
-  if(event.target.id==='attendance-division') {state.division=event.target.value;drawAttendance();}
+  if(event.target.id==='attendance-status') {state.statusFilter=event.target.value;drawAttendance();}
   if(event.target.id==='attendance-date'&&event.target.value) {
     state.date=event.target.value;
     try { await paint(); } catch(error) { notice(error.message,true); }
@@ -332,7 +323,6 @@ setInterval(async()=>{
   try {
     const overview=await api('/overview');
     state.overview=overview;
-    setDevice();
     const rate=overview.summary.members?Math.round(overview.summary.present/overview.summary.members*100):0;
     for (const [key,value] of Object.entries({present:overview.summary.present,members:overview.summary.members,rate,picket:overview.picket.length,pending:overview.summary.pending,reports:overview.reports.length})) {
       const element=document.querySelector('[data-kpi="'+key+'"]');
@@ -352,7 +342,7 @@ setInterval(async()=>{
       }
     }
     if(state.page==='absensi' && state.date===overview.today) {
-      const date=state.date,items=await api('/attendance?date='+date);
+      const date=state.date,items=await api('/attendance?roster=true&date='+date);
       if(state.page==='absensi' && state.date===date && !dialog.open) {state.items=items;drawAttendance();}
     }
   } catch(error) {

@@ -1,0 +1,127 @@
+/* ELITE club identity */
+:root {--ink:#151a29;--paper:#f7f6f1;--white:#fffefa;--muted:#565d6a;--line:#ddded9;--hot:#ff963f;--red:#a64b19}
+body {background:var(--paper)}
+.layout {display:block}
+.sidebar {position:relative;inset:auto;width:100%;height:auto;flex-direction:row;align-items:center;gap:15px;padding:14px max(4vw,20px);background:#101522;border:0;overflow:visible}
+.sidebar .brand {padding:0;margin-right:auto}
+.sidebar .elite-wordmark {width:115px}
+.sidebar .nav-caption {display:none}
+.sidebar nav {display:flex;align-items:center;gap:2px}
+.sidebar nav a {color:#d6d8df;font-size:.81rem;gap:7px;padding:8px 9px;min-height:38px}
+.sidebar nav a:hover,.sidebar nav a[aria-current] {background:#2a2f3c;border-color:#434855;color:white}
+.sidebar nav a[aria-current] svg {color:#ffad61}
+.sidebar nav a[aria-current] i {display:none}
+.topbar {height:54px;padding-inline:max(4vw,20px);background:#f2f1eb}
+.content {max-width:1460px;padding:26px max(4vw,20px) 48px}
+.workspace {min-height:calc(100dvh - 70px)}
+.club-hero {background:#181e30;color:#fff;isolation:isolate;position:relative;display:grid;grid-template-columns:1.24fr .76fr;overflow:hidden;border-radius:18px;min-height:355px;align-items:center}
+.club-hero::before {content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,#161c2b 25%,transparent 76%),repeating-linear-gradient(0deg,transparent 0 27px,#a8b6da13 28px),repeating-linear-gradient(90deg,transparent 0 27px,#a8b6da13 28px),radial-gradient(ellipse at 85% 72%,#424259,#20283c 55%)}
+.club-intro {padding:clamp(28px,4.5vw,72px);z-index:1}
+.club-kicker {font:600 .77rem var(--font-mono);letter-spacing:.05em;color:#e9d3bc;display:flex;align-items:center;gap:8px}
+.club-kicker i {background:#ffa047;width:20px;height:2px}
+.club-intro h1 {font-size:clamp(3rem,5.65vw,6rem);line-height:.96;letter-spacing:-.072em;margin:17px 0 14px;color:#fffdf7}
+.club-intro h1 em {font-style:normal;color:#ffa54e}
+.club-lede {max-width:43ch;color:#d0d5e0;font-size:.96rem}
+.club-intro .btn {margin-top:19px}
+.btn.primary {background:#ff9a48;border-color:#ef8937;color:#25190f}
+.club-emblem {position:relative;justify-self:center;width:min(24vw,310px);aspect-ratio:1;display:grid;place-items:center}
+.orbit {position:absolute;border:1px solid #ffa45185;border-radius:50%;inset:0;pointer-events:none}
+.orbit-one {border-style:dashed;transform:rotate(-14deg)}
+.orbit-two {inset:10%;border:1px solid #d3d8eb66}
+.orbit-three {inset:24%;border:5px double #ffb5756b}
+.orbit-two::after,.orbit-one::after {content:"";position:absolute;top:50%;left:-5px;width:10px;height:10px;background:#ffab56;border-radius:50%;box-shadow:0 0 14px #ff912e80}
+.club-core {transform:rotate(-9deg);background:#ff9b44;display:grid;place-items:center;width:37%;height:37%;border-radius:23%;color:#1a2030;box-shadow:6px 7px 0 #794527}
+.club-core svg {width:68%;height:68%;stroke-width:2.2}
+.club-dateline {position:absolute;bottom:16px;right:22px;display:flex;align-items:center;gap:7px;color:#c6ccdc;font:.7rem var(--font-mono)}
+.club-directory {margin-block:26px}
+.home-section h2,.ops-panel h2 {font-size:clamp(1.3rem,2vw,1.7rem)}
+.quick-link {padding:17px 14px;min-height:88px;border-radius:12px;box-shadow:0 3px 0 #d8d9d1}
+.quick-link strong {font-size:.93rem}
+.quick-link small {font-size:.76rem}
+.page-head {position:relative;isolation:isolate;overflow:hidden;align-items:center;min-height:153px;padding:24px 30px;border-radius:15px;background:#1c2335;color:#fffef9}
+.page-head::after {content:"";position:absolute;right:-60px;top:-150px;width:440px;height:440px;background:repeating-radial-gradient(ellipse at center,transparent 0 14px,#ffba731f 15px 16px,transparent 17px 27px);transform:scaleX(.78) rotate(-22deg);z-index:-1;pointer-events:none}
+.page-head h1 {font-size:clamp(2.2rem,4.35vw,4.1rem);line-height:1.04}
+.page-head .eyebrow {color:#ffc798}
+.page-head .eyebrow i {background:#ff9b44}
+.page-head>div>p:last-child {color:#d4d9e3;font-size:.91rem}
+.panel,.ops-panel,.report {border-radius:13px;box-shadow:0 3px 0 #17203508}
+.panel {padding:18px}
+.filter {gap:14px;padding-bottom:16px;margin-bottom:0}
+.filter label {color:#4e5564;font-size:.8rem}
+.filter input,.filter select {border-color:#d3d6de;min-height:40px}
+.filter #attendance-count {margin-left:auto}
+th {background:#f0f1f3;color:#40485b;font-size:.76rem}
+td,th {padding:12px 13px}
+.table-person .avatar,.roster .avatar {background:#efedf8;color:#51467d;border-radius:9px}
+tbody tr:nth-child(even) .avatar {background:#f9eade;color:#884d22}
+td .btn {min-height:34px;padding:6px 10px}
+td small {white-space:normal}
+.badge.absent {background:#ffe2dc;color:#9b3127}
+.badge.unmarked {background:#eaeaf1;color:#545665}
+.tabs button[aria-pressed=true],.period-tabs button[aria-pressed=true] {background:#252d41;color:white;border-color:#252d41}
+.club-footer {background:#101521;color:#d5d9e5;padding:clamp(28px,4vw,60px) max(4vw,20px) 17px;border-top:4px solid #fb9b4a}
+.footer-grid {display:grid;grid-template-columns:1.22fr .75fr 1fr 1fr;gap:clamp(18px,3vw,47px);max-width:1330px;margin:auto}
+.footer-grid .elite-wordmark {width:127px}
+.footer-grid h2 {font:650 .75rem var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:#ffb269;margin-bottom:13px}
+.footer-grid p,.footer-grid address {font-size:.85rem;line-height:1.7;color:#cbd0dc;font-style:normal}
+.footer-grid p {margin-top:13px;max-width:30ch}
+.footer-grid nav a,.footer-social {display:flex;align-items:center;gap:8px;font-size:.85rem;margin-bottom:5px;width:fit-content}
+.footer-grid a:hover {color:#ffbd88;text-decoration:underline}
+.contact-link {display:inline-flex;align-items:center;gap:5px;color:#ffb77c;font-size:.84rem;margin-top:10px}
+.footer-base {border-top:1px solid #343a48;margin:22px auto 0;padding-top:14px;max-width:1330px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.74rem;color:#aeb7c8}
+@media(prefers-reduced-motion:no-preference) {
+  .orbit-one {animation:club-orbit 36s linear 1}
+  .orbit-two {animation:club-orbit 28s linear reverse 1}
+  .club-intro,.page-head>div:first-child,.club-directory {animation:club-enter .48s ease-out both}
+  .quick-link:hover .ops-icon {transform:rotate(-6deg) translateY(-2px)}
+  .ops-icon {transition:transform .2s}
+  @keyframes club-orbit {to {transform:rotate(346deg)}}
+  @keyframes club-enter {from {opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+}
+@media(max-width:1000px) {
+  .sidebar {display:none;position:absolute;top:58px;left:0;right:0;z-index:7;padding:12px 17px;background:#141a28;box-shadow:0 12px 25px #161b2722}
+  .nav-open .sidebar {display:flex;flex-direction:column;align-items:stretch;gap:2px}
+  .sidebar .brand,.sidebar .nav-caption {display:none}
+  .sidebar nav {display:grid}
+  .topbar {height:58px}
+  .menu {display:grid}
+  .mobile-brand {display:block}.mobile-brand .elite-wordmark {width:84px}
+  .crumb {display:none}
+  .top-right {margin-left:auto}
+  .footer-grid {grid-template-columns:1fr 1fr;gap:26px}
+}
+@media(max-width:620px) {
+  .content {padding:13px 12px 29px}
+  .club-hero {grid-template-columns:1fr;min-height:0}
+  .club-intro {padding:28px 18px 42px}
+  .club-intro h1 {font-size:clamp(2.7rem,10vw,4rem)}
+  .club-emblem {position:absolute;width:180px;right:-90px;top:5px;opacity:.34;z-index:-1}
+  .club-dateline {font-size:.63rem;bottom:9px;right:12px}
+  .club-lede {max-width:34ch}
+  .quick-link {min-height:64px;padding:8px}
+  .page-head {padding:18px;min-height:0}
+  .page-head h1 {font-size:2.4rem}
+  .panel {padding:11px}
+  .filter {display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .filter label {min-width:0}
+  .filter input,.filter select {font-size:16px}
+  #attendance-count {align-self:end}
+  .club-footer {padding:26px 17px 15px}
+  .footer-grid {grid-template-columns:1fr 1fr;gap:22px 14px}
+  .footer-grid .footer-social {overflow-wrap:anywhere;display:block}
+  .footer-social svg {display:inline-block;vertical-align:middle}
+  .footer-base {font-size:.71rem}
+}
+@media(max-width:700px) {
+ .attendance-wrap {border:0;overflow:visible}
+ .attendance-wrap table,.attendance-wrap tbody {display:block}
+ .attendance-wrap thead {position:absolute;clip-path:inset(50%);height:1px;width:1px;overflow:hidden}
+ .attendance-wrap tr {display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#fffefa}
+ .attendance-wrap td {padding:0;border:0;white-space:normal}
+ .attendance-wrap td:first-child {grid-column:1/-1;padding-bottom:5px}
+ .attendance-wrap td:nth-child(2)::before,.attendance-wrap td:nth-child(3)::before {display:block;font:600 .7rem var(--font-sans);color:#646d7c}
+ .attendance-wrap td:nth-child(2)::before {content:"Masuk"}
+ .attendance-wrap td:nth-child(3)::before {content:"Pulang"}
+ .attendance-wrap td:nth-child(4) {align-self:center}
+ .attendance-wrap td:nth-child(5) {text-align:right}
+}

@@ -10,7 +10,7 @@ import { recordAdminChange } from './operations.js';
 
 const mail=z.string().trim().toLowerCase().pipe(z.email().regex(/@gmail\.com$/).max(254));
 const date=z.iso.date();
-const division=z.enum(['Programming','Elektronik','Mekanik']);
+const division=z.string().trim().min(1).max(80);
 const role=z.enum(['admin','viewer']);
 const kind=z.enum(['piket','dokumentasi']);
 const id=z.coerce.number().int().min(1).max(2147483647);
@@ -39,9 +39,17 @@ export function registerRoutes(app,db,cfg) {
     if(req.user.role==='viewer') { delete summary.pending; delete summary.unenrolled; }
     res.json({today,summary,device,picket,reports});
   });
-  app.get('/api/attendance',async(req,res)=>res.json(await rows(db,attendanceQuery,date.parse(req.query.date??localDate().date))));
+  app.get('/api/attendance',async(req,res)=>{
+    const day=date.parse(req.query.date??localDate().date);
+    if(req.query.roster!=='true'||day!==localDate().date) return res.json(await rows(db,attendanceQuery,day));
+    res.json(await rows(db,`SELECT a.id,m.id AS member_id,$1::date::text AS date,
+      a.check_in_time,a.check_out_time,a.notes,coalesce(a.status,'unmarked') AS status,
+      m.full_name,m.class_name,m.division FROM members m
+      LEFT JOIN attendances a ON a.member_id=m.id AND a.date=$1
+      WHERE m.is_active OR a.id IS NOT NULL ORDER BY m.full_name`,day));
+  });
   app.put('/api/attendance',admin,async(req,res)=>{
-    const item=z.object({member_id:id,date,status:z.enum(['present','excused','competition']),check_in_time:time.nullable(),check_out_time:time.nullable(),notes:z.string().trim().max(400)}).parse(req.body);
+    const item=z.object({member_id:id,date,status:z.enum(['present','absent','excused','competition']),check_in_time:time.nullable(),check_out_time:time.nullable(),notes:z.string().trim().max(400)}).parse(req.body);
     if ((item.status==='present' && !item.check_in_time) || (item.status!=='present' && (item.check_in_time||item.check_out_time)) || (item.check_out_time && item.check_out_time<item.check_in_time)) throw fail(400,'Periksa jam masuk dan pulang.');
     await db.transaction(async tx=>{
       const member=await first(tx,'SELECT full_name FROM members WHERE id=$1 AND is_active FOR UPDATE',item.member_id);
@@ -50,7 +58,7 @@ export function registerRoutes(app,db,cfg) {
         VALUES ($1,$2,$3,$4,$5,$6,'manual') ON CONFLICT (member_id,date) DO UPDATE SET status=excluded.status,
         check_in_time=excluded.check_in_time,check_out_time=excluded.check_out_time,notes=excluded.notes,method='manual',last_scan_at=NULL RETURNING id`,
         item.member_id,item.date,item.status,item.check_in_time,item.check_out_time,item.notes);
-      await recordAdminChange(tx,req.user,'attendance_saved',saved.id,member.full_name+' · '+item.date);
+      await recordAdminChange(tx,req.user,'attendance_saved',saved.id,member.full_name+' · '+item.date+' · '+({present:'Hadir',absent:'Tidak hadir',excused:'Izin',competition:'Dispensasi'}[item.status]));
     });
     res.json({ok:true});
   });
@@ -82,7 +90,7 @@ export function registerRoutes(app,db,cfg) {
   });
   app.post('/api/reports',admin,upload.single('photo'),async(req,res)=>{
     const item=z.object({kind,date,division:division.optional(),caption:z.string().trim().min(3).max(500)}).parse(req.body);
-    if (!req.file || (item.kind==='dokumentasi' && !item.division)) throw fail(400,'Pilih foto dan divisi yang sesuai.');
+    if (!req.file || (item.kind==='dokumentasi' && !item.division)) throw fail(400,'Pilih foto dan jurusan yang sesuai.');
     let output;
     try {
       const source=sharp(req.file.buffer,{limitInputPixels:32_000_000});

@@ -7,15 +7,18 @@ export const initials=name=>String(name??'ELITE').trim().split(/\s+/).slice(0,2)
 export const shortTime=value=>value?.slice(0,5)||'—';
 export const formatDate=(value,full=false)=>new Intl.DateTimeFormat('id-ID',{...(full?{weekday:'long'}:{}),day:'numeric',month:'long',year:'numeric',timeZone:'Asia/Jakarta'}).format(new Date(value+'T12:00:00+07:00'));
 export const days=['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-export const divisions=['Programming','Elektronik','Mekanik'];
-export const labels={present:'Hadir',excused:'Izin',competition:'Lomba / Dispensasi',pending:'Menunggu Cek Admin',approved:'Disetujui',rejected:'Perlu Revisi',admin:'Admin',viewer:'Pelihat'};
+export function memberStudy(member) {
+  const major=['Programming','Elektronik','Mekanik'].includes(member.division)?'':member.division;
+  return [member.class_name,major].filter(Boolean).join(' · ');
+}
+export const labels={present:'Hadir',absent:'Tidak hadir',unmarked:'Belum tercatat',excused:'Izin',competition:'Lomba / Dispensasi',pending:'Menunggu Cek Admin',approved:'Disetujui',rejected:'Perlu Revisi',admin:'Admin',viewer:'Pelihat'};
 export const badge=status=>'<span class="badge '+h(status)+'"><i></i>'+h(labels[status]??status)+'</span>';
 export const tags=values=>values.map(value=>'<option>'+h(value)+'</option>').join('');
 export const empty=(message)=>'<p class="empty">'+h(message)+'</p>';
 export const btn=(label,action,style='primary',glyph='')=>'<button type="button" class="btn '+style+'" data-action="'+action+'">'+(glyph?icon(glyph,17):'')+h(label)+'</button>';
 export function roster(items) {
   if(!items.length) return empty('Belum ada petugas terjadwal.');
-  return '<ul class="roster">'+items.map(x=>'<li><span class="avatar">'+h(initials(x.full_name))+'</span><span><strong>'+h(x.full_name)+'</strong><small>'+h(x.class_name)+' · '+h(x.division)+'</small></span></li>').join('')+'</ul>';
+  return '<ul class="roster">'+items.map(x=>'<li><span class="avatar">'+h(initials(x.full_name))+'</span><span><strong>'+h(x.full_name)+'</strong><small>'+h(memberStudy(x))+'</small></span></li>').join('')+'</ul>';
 }
 export function reports(items,isAdmin=false) {
   if(!items.length) return empty('Belum ada laporan foto.');
