@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   invited_by integer REFERENCES users(id),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash text PRIMARY KEY,
   user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -70,6 +71,7 @@ CREATE TABLE IF NOT EXISTS reports (
   CHECK (kind <> 'dokumentasi' OR division IS NOT NULL),
   CHECK (verification_status <> 'rejected' OR length(trim(verification_note)) > 0)
 );
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS photo_data bytea;
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS picket_snapshot jsonb;
 CREATE TABLE IF NOT EXISTS admin_changes (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

@@ -12,7 +12,7 @@ const symbols={
   attendance_saved:['fingerprint','Absensi manual disimpan','mint'],
   report_approved:['circle-check','Laporan disetujui','mint'],report_revision:['file-check-2','Revisi diminta','honey'],
   fingerprint_linked:['fingerprint','ID presensi ditautkan','blue'],fingerprint_unlinked:['fingerprint','ID presensi dilepas','blue'],
-  access_granted:['shield-check','Akses Gmail aktif','plum'],access_revoked:['shield-check','Akses Gmail dicabut','honey'],
+  access_granted:['shield-check','Akses akun aktif','plum'],access_revoked:['shield-check','Akses akun dicabut','honey'],
 };
 export const modules=[
   ['absensi','Absensi Anggota','Lihat presensi dan jam masuk','fingerprint','coral'],

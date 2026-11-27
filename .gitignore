@@ -3,3 +3,5 @@ dist/
 .env
 storage/
 firmware/elite_fingerprint/secrets.h
+
+.next/

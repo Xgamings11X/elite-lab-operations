@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
-import { first,rows,localDate } from './db.js';
+import { first,rows,localDate,weekday } from './db.js';
 import { fail,digest } from './auth.js';
 
 export function iot(app,db,cfg) {
@@ -27,6 +27,7 @@ export function iot(app,db,cfg) {
       const member=await first(tx,'SELECT id,full_name FROM members WHERE is_active AND fingerprint_device=$1 AND fingerprint_id=$2 FOR UPDATE',cfg.device,scan.fingerprint_id);
       if (!member) return {status:'unknown',message:'ID sidik jari belum ditautkan.'};
       const { date,time,now }=localDate();
+      if(weekday(date)!==6) throw fail(400,'Absensi ekskul hanya dibuka hari Sabtu WIB.');
       const attendance=await first(tx,'SELECT status,check_in_time,check_out_time,last_scan_at FROM attendances WHERE member_id=$1 AND date=$2 FOR UPDATE',member.id,date);
       let type='IN';
       if (!attendance) {

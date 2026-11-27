@@ -1,0 +1,1 @@
+export default {serverExternalPackages:['@electric-sql/pglite','pg','express','sharp','multer','express-rate-limit'],outputFileTracingIncludes:{'/api/*':['./database/schema.sql','./server/demo-assets/**/*']}};

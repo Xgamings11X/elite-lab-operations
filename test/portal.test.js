@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import { createApp } from '../server/index.js';
 
 test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:new Date('2026-11-28T03:00:00Z')});
   const instance=await createApp({},true);
   const server=instance.app.listen(0,'127.0.0.1');
   await once(server,'listening');
@@ -43,10 +44,13 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
   assert.equal((await call('/reports/1/photo')).status,401);
   assert.equal((await call('/reports/1/photo',{cookie:viewer})).status,200);
 
+  assert.equal((await call('/picket?day=6',{cookie:admin})).status,400);
+  const friday=await call('/attendance',{cookie:admin,method:'PUT',body:{member_id:1,date:'2026-11-27',status:'absent',notes:'',check_in_time:null,check_out_time:null}});
+  assert.equal(friday.status,400);
   const png=await sharp({create:{width:24,height:24,channels:3,background:'#FF3E3E'}}).png().toBuffer();
   const photo=new FormData();
   photo.set('kind','piket');
-  photo.set('date',today);
+  photo.set('date','2026-11-27');
   photo.set('caption','Foto uji petugas lab');
   photo.set('photo',new Blob([png],{type:'image/png'}),'photo.png');
   assert.equal((await call('/reports',{method:'POST',cookie:viewer,body:photo})).status,403);
@@ -58,7 +62,7 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
   assert.equal(Buffer.from(stored.result).subarray(8,12).toString(),'WEBP');
   const context=await call('/admin/reports/'+reportId+'/context',{cookie:admin});
   assert.equal(context.status,200);
-  assert.ok(context.result.allAttendance.length>=18);
+  assert.ok(Array.isArray(context.result.allAttendance));
   const review=(status,note)=>call('/admin/reports/'+reportId,{method:'PATCH',cookie:admin,body:{status,note}});
   assert.equal((await review('rejected','')).status,400);
   assert.equal((await review('rejected','Mohon foto lebih terang.')).status,200);
@@ -93,8 +97,12 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
   assert.equal(updated.check_in_time,null);
   assert.equal(updated.check_out_time,null);
   assert.equal((await scan({body:{event_id:randomUUID()}})).result.type,'UNCHANGED');
+  const account={email:'undangan.uji@gmail.com',password:'kata-sandi-uji',name:'Anggota Uji'};
+  assert.equal((await call('/auth/signup',{method:'POST',body:account})).status,201);
+  assert.equal((await call('/auth/signin',{method:'POST',body:account})).status,403);
   const invited=await call('/admin/users',{method:'POST',cookie:admin,body:{email:'undangan.uji@gmail.com',role:'viewer'}});
   assert.equal(invited.status,201);
+  assert.ok((await call('/auth/signin',{method:'POST',body:account})).cookie);
   assert.equal((await call('/admin/users/'+invited.result.id,{method:'DELETE',cookie:admin})).status,204);
   const users=await call('/admin/users',{cookie:admin});
   const viewerId=users.result.find(user=>user.email==='viewer@gmail.com').id;

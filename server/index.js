@@ -6,34 +6,40 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { mkdtemp,mkdir,rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { ZodError } from 'zod';
-import { authentication,fail } from './auth.js';
+import { authentication,fail,passwordHash } from './auth.js';
 import { database,rows } from './db.js';
 import { seedDemo } from './demo.js';
 import { iot } from './iot.js';
 import { registerRoutes } from './routes.js';
 import { registerOperations } from './operations.js';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
+const root = process.cwd();
 export async function createApp(env=process.env,demo=false) {
   const productionDomain = !demo && env.VERCEL_PROJECT_PRODUCTION_URL;
-  const url = new URL(env.APP_URL || (productionDomain ? 'https://' + productionDomain : 'http://localhost:4173'));
+  const url = new URL(env.APP_URL || (productionDomain ? 'https://' + productionDomain : (demo?'http://localhost:4173':'http://localhost:3000')));
   const host=env.HOST||'127.0.0.1';
   const loopback=['localhost','127.0.0.1','[::1]'].includes(url.hostname);
   if (url.protocol!=='https:' && !(url.protocol==='http:' && loopback)) throw Error('APP_URL harus HTTPS di luar loopback.');
   if (demo && (host!=='127.0.0.1'||!loopback)) throw Error('Demo hanya untuk loopback.');
-  if (!demo && (!env.DATABASE_URL || !env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.BOOTSTRAP_ADMIN_EMAIL?.match(/^[a-z0-9._+%-]+@gmail\.com$/i) || (env.DEVICE_TOKEN?.length??0)<32)) throw Error('Lengkapi DATABASE_URL, kredensial Google, Gmail admin dan token perangkat (min. 32 karakter).');
+  if (!demo && (!env.DATABASE_URL || !env.BOOTSTRAP_ADMIN_EMAIL?.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) || (env.BOOTSTRAP_ADMIN_PASSWORD?.length??0)<10 || env.BOOTSTRAP_ADMIN_PASSWORD.length>128 || (env.DEVICE_TOKEN?.length??0)<32)) throw Error('Lengkapi DATABASE_URL, email dan kata sandi admin (10–128 karakter) dan token perangkat (min. 32 karakter).');
   const cfg={demo,url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C1-LAB-01',
-    googleId:env.GOOGLE_CLIENT_ID,googleSecret:env.GOOGLE_CLIENT_SECRET,deviceToken:demo?'demo-local-device-token':env.DEVICE_TOKEN,
+    deviceToken:demo?'demo-local-device-token':env.DEVICE_TOKEN,
     storage: demo?await mkdtemp(join(tmpdir(),'elite-demo-')):resolve(env.STORAGE_DIR||join(root,'storage')),root};
   const storageFromDist=relative(join(root,'dist'),cfg.storage);
   if (!demo && !isAbsolute(storageFromDist) && !/^\.\.(?:[\\/]|$)/.test(storageFromDist)) throw Error('Lokasi foto harus di luar folder dist.');
   if (!/^[a-zA-Z0-9._-]{1,80}$/.test(cfg.device)) throw Error('Format DEVICE_ID tidak sah.');
   const db=await database(demo?null:env.DATABASE_URL);
-  await mkdir(cfg.storage,{recursive:true});
+  if (!env.VERCEL) await mkdir(cfg.storage,{recursive:true});
   await rows(db,'INSERT INTO devices(id) VALUES ($1) ON CONFLICT DO NOTHING',cfg.device);
   let demoUsers;
   if (demo) demoUsers=await seedDemo(db,cfg.device);
-  else await rows(db,"INSERT INTO users(email,role) SELECT $1,'admin' WHERE NOT EXISTS(SELECT 1 FROM users) ON CONFLICT DO NOTHING",env.BOOTSTRAP_ADMIN_EMAIL.toLowerCase());
+  else {
+    const email=env.BOOTSTRAP_ADMIN_EMAIL.trim().toLowerCase();
+    const existing=(await rows(db,'SELECT password_hash FROM users WHERE email=$1',email))[0];
+    if(!existing?.password_hash) await rows(db,`INSERT INTO users(email,role,password_hash) VALUES ($1,'admin',$2)
+      ON CONFLICT(email) DO UPDATE SET password_hash=excluded.password_hash WHERE users.role='admin' AND users.password_hash IS NULL`,
+      email,await passwordHash(env.BOOTSTRAP_ADMIN_PASSWORD));
+  }
   const app=express();
   app.disable('x-powered-by');
   app.set('trust proxy',Number(env.TRUST_PROXY_HOPS||0));
@@ -72,9 +78,4 @@ export async function createApp(env=process.env,demo=false) {
     res.status(status).json({error:status>=500?'Terjadi gangguan pada server.':err.message});
   });
   return {app,cfg,close:async()=>{await db.close();if(demo) await rm(cfg.storage,{recursive:true,force:true});}};
-}
-if (process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
-  const {app,cfg,close}=await createApp(process.env,process.argv.includes('--demo'));
-  const server=app.listen(cfg.port,cfg.host,()=>console.log('ELITE '+(cfg.demo?'demo':'portal')+' http://'+cfg.host+':'+cfg.port));
-  for (const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>server.close(async()=>{await close();process.exit(0);}));
 }

@@ -1,9 +1,3 @@
-import '@fontsource-variable/space-grotesk/wght.css';
-import '@fontsource-variable/plus-jakarta-sans/wght.css';
-import '@fontsource-variable/jetbrains-mono/wght.css';
-import './style.css';
-import './workspace.css';
-import './club.css';
 import { api,compress } from './api.js';
 import { badge,btn,empty,formatDate,h,icon,roster,memberStudy } from './ui.js';
 import { adminPanel,attendance,attendanceTable,availablePages,dashboard,gallery,home,login,pages,picket,shell } from './views.js';
@@ -58,8 +52,11 @@ async function paint({replace=false,append=false}={}) {
   if(version!==paintVersion) return;
   state.overview=overview;
   state.insights=insights;
-  state.date ||= overview.today;
-  state.day ||= new Date(overview.today+'T12:00:00Z').getUTCDay() || 1;
+  const recentSaturday=new Date(overview.today+'T12:00:00Z');
+  recentSaturday.setUTCDate(recentSaturday.getUTCDate()-(recentSaturday.getUTCDay()+1)%7);
+  state.date ||= recentSaturday.toISOString().slice(0,10);
+  const weekdayNow=new Date(overview.today+"T12:00:00Z").getUTCDay();
+  state.day ||= weekdayNow >= 1 && weekdayNow <= 5 ? weekdayNow : 1;
   const day=state.day;
   let output,items,photos,canLoadMore;
   if(page==='beranda') output=home(overview,admin);
@@ -138,9 +135,9 @@ function persist(path,method,makeBody) {
 async function openAction(action,value) {
   const item=state.items.find(x=>x.id===Number(value));
   if(action==='invite') {
-    showDialog('Invite Gmail',field('Alamat Gmail','<input name="email" type="email" placeholder="anggota@gmail.com" required>')+
+    showDialog('Aktifkan akun',field('Alamat email terdaftar','<input name="email" type="email" placeholder="anggota@gmail.com" required>')+
       field('Peran','<select name="role"><option value="viewer">Pelihat</option><option value="admin">Admin</option></select>')+
-      '<p class="hint">Bagikan alamat portal kepada penerima setelah akses dibuat.</p>',persist('/admin/users','POST',x=>x),'Aktifkan akses');
+      '<p class="hint">Pastikan identitas pemilik akun sebelum memberikan akses.</p>',persist('/admin/users','POST',x=>x),'Aktifkan akses');
   }
   if(action==='member') showDialog('Tambah anggota',field('Nama lengkap','<input name="full_name" required minlength="2" maxlength="120">')+
     field('Kelas','<input name="class_name" required maxlength="50">')+field('Jurusan','<input name="division" required maxlength="80" placeholder="Contoh: Teknik Pemesinan">'),persist('/admin/members','POST',x=>x));
@@ -148,7 +145,7 @@ async function openAction(action,value) {
     field('Nomor registrasi','<input name="fingerprint_id" type="number" min="1" max="65535" value="'+(item.fingerprint_id??'')+'">')+
     '<p class="hint">Masukkan nomor registrasi anggota. Kosongkan untuk melepas tautan.</p>',
     persist('/admin/members/'+item.id+'/fingerprint','PATCH',x=>({fingerprint_id:x.fingerprint_id?Number(x.fingerprint_id):null})));
-  if(action==='revoke'&&item) showDialog('Cabut akses Gmail',`<p>Akhiri semua sesi dan cabut akses <strong>${h(item.email)}</strong>?</p>`,persist('/admin/users/'+item.id,'DELETE',()=>null),'Cabut akses');
+  if(action==='revoke'&&item) showDialog('Cabut akses akun',`<p>Akhiri semua sesi dan cabut akses <strong>${h(item.email)}</strong>?</p>`,persist('/admin/users/'+item.id,'DELETE',()=>null),'Cabut akses');
   if(action==='picket-remove'&&item) showDialog('Hapus jadwal petugas',`<p>Hapus <strong>${h(item.full_name)}</strong> dari jadwal hari ini?</p>`,persist('/picket/'+item.id,'DELETE',()=>null),'Hapus jadwal');
   if(action==='picket-add') {
     const members=await api('/admin/members'),day=state.day;
@@ -205,11 +202,35 @@ function syncTimes() {
   form.elements.check_out_time.disabled=!present;
   form.elements.check_in_time.required=present;
 }
+function renderAccount(mode) {
+  root.innerHTML=login(state.session.demo,mode);
+}
+root.addEventListener('submit',async event=>{
+  const form=event.target;
+  if(form.id!=='account-form') return;
+  event.preventDefault();
+  const submit=form.querySelector('[type=submit]');
+  if(submit.disabled) return;
+  const values=Object.fromEntries(new FormData(form));
+  const signup=form.dataset.mode==='signup';
+  submit.disabled=true;
+  submit.textContent=signup?'Mendaftarkan…':'Memeriksa…';
+  form.setAttribute('aria-busy','true');
+  try {
+    await api('/auth/'+form.dataset.mode,'POST',values);
+    if(signup) {
+      renderAccount('signin');
+      const next=$('#account-form');
+      next.elements.email.value=values.email;
+      next.querySelector('.auth-message').textContent='Akun terdaftar. Setelah admin mengaktifkan aksesmu, masuk di sini.';
+      next.elements.password.focus();
+    } else {state.page='';await getSession();}
+  } catch(error) {form.querySelector('.auth-message').textContent=error.message;}
+  finally {submit.disabled=false;submit.textContent=signup?'Daftar akun':'Masuk';form.removeAttribute('aria-busy');}
+});
 async function getSession(boot=false) {
   state.session=await api('/session');
-  const reason=new URLSearchParams(location.search).get('login');
-  const error=reason==='access'?'Akun Gmail belum memiliki akses aktif.':reason?'Login Google gagal. Silakan coba lagi.':'';
-  if(!state.session.user) {state.page='';root.innerHTML=login(state.session.demo,error);return;}
+  if(!state.session.user) {state.page='';renderAccount('signup');return;}
   if(boot) {
     state.page=currentPage();
     await paint({replace:true});
@@ -222,6 +243,7 @@ document.addEventListener('click',async event=>{
   if(!button||busy) return;
   const [action,value]=button.dataset.action.split(':');
   try {
+    if(action==='authMode') {renderAccount(value);$('#account-form input').focus();return;}
     if(action==='close') return dialog.close();
     if(action==='menu') {
       const opened=$('.layout').classList.toggle('nav-open');
@@ -290,6 +312,7 @@ document.addEventListener('change',async event=>{
   }
   if(event.target.id==='attendance-status') {state.statusFilter=event.target.value;drawAttendance();}
   if(event.target.id==='attendance-date'&&event.target.value) {
+    if(new Date(event.target.value+'T12:00:00Z').getUTCDay()!==6){event.target.value=state.date;notice('Pilih hari Sabtu untuk melihat absensi ekskul.',true);return;}
     state.date=event.target.value;
     try { await paint(); } catch(error) { notice(error.message,true); }
   }

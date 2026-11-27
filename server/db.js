@@ -4,7 +4,7 @@ import pg from 'pg';
 
 export async function database(url) {
   const client = url ? new pg.Pool({ connectionString: url }) : new PGlite();
-  const schema = await readFile(new URL('../database/schema.sql', import.meta.url), 'utf8');
+  const schema = await readFile(process.cwd()+'/database/schema.sql', 'utf8');
   if (url) await client.query(schema);
   else await client.exec(schema);
   return {

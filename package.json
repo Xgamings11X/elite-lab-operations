@@ -6,10 +6,10 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "build": "vite build",
-    "start": "node --env-file-if-exists=.env server/index.js",
-    "demo": "node server/index.js --demo",
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "next start",
+    "demo": "node scripts/demo.mjs",
     "test": "node --test"
   },
   "dependencies": {
@@ -17,19 +17,20 @@
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@fontsource-variable/plus-jakarta-sans": "^5.2.8",
     "@fontsource-variable/space-grotesk": "^5.2.10",
+    "@tailwindcss/postcss": "^4.3.5",
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.0",
-    "google-auth-library": "^10.5.0",
     "helmet": "^8.1.0",
     "lucide": "npm:lucide-static@^0.548.0",
     "multer": "^2.0.2",
+    "next": "^16.4.6",
     "pg": "^8.16.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "sharp": "^0.35.5",
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.17",
-    "tailwindcss": "^4.1.17",
-    "vite": "^7.2.2"
+    "tailwindcss": "^4.1.17"
   }
 }

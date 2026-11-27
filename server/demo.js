@@ -9,14 +9,14 @@ export async function seedDemo(db,device) {
   const today = localDate().date;
   for (let i=0;i<names.length;i++) {
     const id = (await first(db,'INSERT INTO members(full_name,class_name,division,fingerprint_id,fingerprint_device) VALUES ($1,$2,$3,$4,$5) RETURNING id',names[i],classes[i%6],divisions[i%3],i<21?i+1:null,i<21?device:null)).id;
-    if (i<20) await rows(db,'INSERT INTO attendances(member_id,date,check_in_time,method,status) VALUES ($1,$2,$3,$4,$5)',id,today,i<18?`07:${String(7+i).padStart(2,'0')}`:null,i<14?'esp32_c1_fingerprint':'manual',i<18?'present':i===18?'excused':'competition');
-    if (i<18) await rows(db,'INSERT INTO picket_schedules(day_of_week,member_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',i%6+1,id);
-    if (i<3 && weekday(today)) await rows(db,'INSERT INTO picket_schedules(day_of_week,member_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',weekday(today),id);
+    if (weekday(today)===6 && i<20) await rows(db,'INSERT INTO attendances(member_id,date,check_in_time,method,status) VALUES ($1,$2,$3,$4,$5)',id,today,i<18?`07:${String(7+i).padStart(2,'0')}`:null,i<14?'esp32_c1_fingerprint':'manual',i<18?'present':i===18?'excused':'competition');
+    if (i<18) await rows(db,'INSERT INTO picket_schedules(day_of_week,member_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',i%5+1,id);
+    if (i<3 && weekday(today)>=1 && weekday(today)<=5) await rows(db,'INSERT INTO picket_schedules(day_of_week,member_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',weekday(today),id);
   }
   const pastCounts=[7,9,12,10,15,11,0,13,16,11,19,15,21];
   for(let offset=1;offset<=pastCounts.length;offset++) {
     const count=pastCounts[offset-1];
-    if(!count) continue;
+    if(!count || weekday(new Date(Date.parse(today)-offset*86400000).toISOString().slice(0,10))!==6) continue;
     await rows(db,`INSERT INTO attendances (member_id,date,check_in_time,check_out_time,method,status)
       SELECT id,$1::date-$2::integer,time '07:25',time '15:35','esp32_c1_fingerprint','present'
       FROM members ORDER BY id LIMIT $3`,today,offset,count);

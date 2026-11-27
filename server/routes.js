@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir,writeFile,unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import multer from 'multer';
 import sharp from 'sharp';
@@ -8,7 +7,7 @@ import { admin,fail } from './auth.js';
 import { first,rows,localDate,weekday } from './db.js';
 import { recordAdminChange } from './operations.js';
 
-const mail=z.string().trim().toLowerCase().pipe(z.email().regex(/@gmail\.com$/).max(254));
+const mail=z.string().trim().toLowerCase().pipe(z.email().max(254));
 const date=z.iso.date();
 const division=z.string().trim().min(1).max(80);
 const role=z.enum(['admin','viewer']);
@@ -20,7 +19,7 @@ const memberFields=z.object({full_name:z.string().trim().min(2).max(120),class_n
 const attendanceQuery=`SELECT a.id,a.member_id,a.date::text,a.check_in_time,a.check_out_time,a.method,a.status,a.notes,
   m.full_name,m.class_name,m.division FROM attendances a JOIN members m ON m.id=a.member_id WHERE a.date=$1 ORDER BY a.check_in_time NULLS LAST,m.full_name`;
 const picketQuery=`SELECT p.id,m.id AS member_id,m.full_name,m.class_name,m.division FROM picket_schedules p
-  JOIN members m ON m.id=p.member_id WHERE p.day_of_week=$1 AND m.is_active ORDER BY m.full_name`;
+  JOIN members m ON m.id=p.member_id WHERE p.day_of_week BETWEEN 1 AND 5 AND p.day_of_week=$1 AND m.is_active ORDER BY m.full_name`;
 const reportQuery=`SELECT id,kind,date::text,division,caption,verification_status,verification_note,verified_by_email,verified_at,submitted_by_email,created_at,
   '/api/reports/' || id || '/photo' AS photo_url FROM reports`;
 
@@ -41,7 +40,7 @@ export function registerRoutes(app,db,cfg) {
   });
   app.get('/api/attendance',async(req,res)=>{
     const day=date.parse(req.query.date??localDate().date);
-    if(req.query.roster!=='true'||day!==localDate().date) return res.json(await rows(db,attendanceQuery,day));
+    if(req.query.roster!=='true'||weekday(day)!==6) return res.json(await rows(db,attendanceQuery,day));
     res.json(await rows(db,`SELECT a.id,m.id AS member_id,$1::date::text AS date,
       a.check_in_time,a.check_out_time,a.notes,coalesce(a.status,'unmarked') AS status,
       m.full_name,m.class_name,m.division FROM members m
@@ -50,6 +49,7 @@ export function registerRoutes(app,db,cfg) {
   });
   app.put('/api/attendance',admin,async(req,res)=>{
     const item=z.object({member_id:id,date,status:z.enum(['present','absent','excused','competition']),check_in_time:time.nullable(),check_out_time:time.nullable(),notes:z.string().trim().max(400)}).parse(req.body);
+    if (weekday(item.date)!==6) throw fail(400,'Absensi ekskul hanya untuk hari Sabtu.');
     if ((item.status==='present' && !item.check_in_time) || (item.status!=='present' && (item.check_in_time||item.check_out_time)) || (item.check_out_time && item.check_out_time<item.check_in_time)) throw fail(400,'Periksa jam masuk dan pulang.');
     await db.transaction(async tx=>{
       const member=await first(tx,'SELECT full_name FROM members WHERE id=$1 AND is_active FOR UPDATE',item.member_id);
@@ -62,9 +62,9 @@ export function registerRoutes(app,db,cfg) {
     });
     res.json({ok:true});
   });
-  app.get('/api/picket',async(req,res)=>res.json(await rows(db,picketQuery,z.coerce.number().int().min(1).max(6).parse(req.query.day))));
+  app.get('/api/picket',async(req,res)=>res.json(await rows(db,picketQuery,z.coerce.number().int().min(1).max(5).parse(req.query.day))));
   app.post('/api/picket',admin,async(req,res)=>{
-    const item=z.object({day:z.number().int().min(1).max(6),member_id:id}).parse(req.body);
+    const item=z.object({day:z.number().int().min(1).max(5),member_id:id}).parse(req.body);
     const result=await first(db,`INSERT INTO picket_schedules(day_of_week,member_id)
       SELECT $1,id FROM members WHERE id=$2 AND is_active ON CONFLICT DO NOTHING RETURNING id`,item.day,item.member_id);
     if (!result) throw fail(409,'Anggota sudah dijadwalkan atau tidak aktif.');
@@ -82,14 +82,16 @@ export function registerRoutes(app,db,cfg) {
       ORDER BY id DESC LIMIT 24`,query.kind??null,Boolean(query.pending),query.before??null));
   });
   app.get('/api/reports/:id/photo',async(req,res,next)=>{
-    const report=await first(db,'SELECT kind,photo_key,demo_asset FROM reports WHERE id=$1',id.parse(req.params.id));
+    const report=await first(db,'SELECT kind,photo_key,demo_asset,photo_data FROM reports WHERE id=$1',id.parse(req.params.id));
     if(!report) throw fail(404,'Foto tidak ditemukan.');
+    if(report.photo_data) return res.type('image/webp').send(Buffer.from(report.photo_data));
     const path=report.demo_asset ? join(cfg.root,'server','demo-assets',report.photo_key+'.webp') : join(cfg.storage,report.kind,report.photo_key);
     res.set('Content-Type','image/webp');
     res.sendFile(path,{cacheControl:false},error=>{if(error) next(error);});
   });
   app.post('/api/reports',admin,upload.single('photo'),async(req,res)=>{
     const item=z.object({kind,date,division:division.optional(),caption:z.string().trim().min(3).max(500)}).parse(req.body);
+    if (item.kind==='piket' && ![1,2,3,4,5].includes(weekday(item.date))) throw fail(400,'Piket berlangsung Senin sampai Jumat.');
     if (!req.file || (item.kind==='dokumentasi' && !item.division)) throw fail(400,'Pilih foto dan jurusan yang sesuai.');
     let output;
     try {
@@ -99,18 +101,11 @@ export function registerRoutes(app,db,cfg) {
       output=await source.rotate().resize(1600,1600,{fit:'inside',withoutEnlargement:true}).webp({quality:78}).toBuffer();
     } catch { throw fail(415,'Gunakan foto JPEG, PNG, HEIC, atau WebP yang dapat dibuka.'); }
     const key=randomUUID()+'.webp';
-    const directory=join(cfg.storage,item.kind);
-    await mkdir(directory,{recursive:true});
-    const path=join(directory,key);
-    await writeFile(path,output,{flag:'wx'});
-    let result;
-    try {
-      result=await db.transaction(async tx=>{
+    const result=await db.transaction(async tx=>{
         const snapshot=item.kind==='piket'?JSON.stringify(await rows(tx,picketQuery,weekday(item.date))):null;
-        return first(tx,`INSERT INTO reports(kind,date,division,caption,photo_key,submitted_by_email,picket_snapshot)
-          VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING id`,item.kind,item.date,item.division??null,item.caption,key,req.user.email,snapshot);
+        return first(tx,`INSERT INTO reports(kind,date,division,caption,photo_key,submitted_by_email,picket_snapshot,photo_data)
+          VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8) RETURNING id`,item.kind,item.date,item.division??null,item.caption,key,req.user.email,snapshot,output);
       });
-    } catch (error) { await unlink(path).catch(()=>{}); throw error; }
     res.status(201).json(result);
   });
   app.get('/api/admin/reports/:id/context',admin,async(req,res)=>{
@@ -149,13 +144,12 @@ export function registerRoutes(app,db,cfg) {
     });
     res.json({id:memberId});
   });
-  app.get('/api/admin/users',admin,async(req,res)=>res.json(await rows(db,'SELECT id,email,name,role,is_active,(google_sub IS NOT NULL) AS signed_in FROM users ORDER BY is_active DESC,email')));
+  app.get('/api/admin/users',admin,async(req,res)=>res.json(await rows(db,'SELECT id,email,name,role,is_active,(password_hash IS NOT NULL) AS signed_in FROM users ORDER BY is_active DESC,email')));
   app.post('/api/admin/users',admin,async(req,res)=>{
     const item=z.object({email:mail,role}).parse(req.body);
     const result=await db.transaction(async tx=>{
-      const saved=await first(tx,`INSERT INTO users(email,role,invited_by) VALUES($1,$2,$3)
-        ON CONFLICT(email) DO UPDATE SET is_active=true,role=excluded.role,invited_by=excluded.invited_by WHERE NOT users.is_active RETURNING id`,item.email,item.role,req.user.id);
-      if(!saved) throw fail(409,'Akses Gmail ini sudah aktif.');
+      const saved=await first(tx,`UPDATE users SET is_active=true,role=$2,invited_by=$3 WHERE email=$1 AND NOT is_active AND password_hash IS NOT NULL RETURNING id`,item.email,item.role,req.user.id);
+      if(!saved) throw fail(409,'Pilih akun terdaftar yang belum aktif.');
       await recordAdminChange(tx,req.user,'access_granted',saved.id,item.email+' · '+(item.role==='admin'?'Admin':'Pelihat'));
       return saved;
     });

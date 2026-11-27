@@ -6,7 +6,7 @@ export const h=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','
 export const initials=name=>String(name??'ELITE').trim().split(/\s+/).slice(0,2).map(word=>word[0]).join('').toUpperCase();
 export const shortTime=value=>value?.slice(0,5)||'—';
 export const formatDate=(value,full=false)=>new Intl.DateTimeFormat('id-ID',{...(full?{weekday:'long'}:{}),day:'numeric',month:'long',year:'numeric',timeZone:'Asia/Jakarta'}).format(new Date(value+'T12:00:00+07:00'));
-export const days=['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+export const days=['Senin','Selasa','Rabu','Kamis','Jumat'];
 export function memberStudy(member) {
   const major=['Programming','Elektronik','Mekanik'].includes(member.division)?'':member.division;
   return [member.class_name,major].filter(Boolean).join(' · ');

@@ -22,20 +22,16 @@ Pengujian integrasi mengecek tren absensi 14 hari, perlindungan riwayat admin, a
 
 ## Konfigurasi produksi
 
-1. Siapkan PostgreSQL. Untuk lokal dengan Docker, salin `.env.example` ke `.env`, ubah `POSTGRES_PASSWORD` dan URL koneksi agar cocok, lalu jalankan `docker compose up -d db`. Untuk server terkelola, isi `DATABASE_URL` dengan koneksi terenkripsi yang disediakan penyedia.
-2. Di Google Cloud, buat OAuth Client ID bertipe **Web application**. Tambahkan redirect URI persis seperti `APP_URL` + `/api/auth/google/callback`. Contoh lokal `http://localhost:4173/api/auth/google/callback`. Jika consent screen masih dalam status Testing, tambahkan Gmail yang akan dipakai sebagai test user di konsol Google.
-3. Isi `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, dan `BOOTSTRAP_ADMIN_EMAIL` di `.env`. Gmail tersebut dipakai untuk bootstrap bila tabel pengguna masih kosong. Pertahankan `DEVICE_ID=ESP32-C1-LAB-01` atau sesuaikan dengan firmware.
-4. Buat `DEVICE_TOKEN` acak dan masukkan nilai yang sama di konfigurasi firmware. Contoh pembuatan token di terminal sendiri: `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
-5. Jalankan `npm run build`, lalu `npm start`. Backend akan menerapkan skema SQL idempoten saat mulai. Dari akun admin pertama, tambahkan anggota, jadwal piket, dan Gmail yang diizinkan. Fitur **Invite Gmail** mengaktifkan akses melalui whitelist. Admin membagikan alamat portal kepada penerima.
-6. Untuk penggunaan sekolah, jalankan Express di belakang reverse proxy HTTPS, gunakan `APP_URL` dengan domain HTTPS, dan isi `TRUST_PROXY_HOPS` sesuai jumlah hop proxy yang dikendalikan. Simpan `STORAGE_DIR` pada volume persisten di luar folder aset publik. Cadangkan database dan direktori foto dalam periode yang sama. Sajikan satu instance Express apabila foto masih memakai disk lokal.
+Gunakan preset Next.js pada Vercel. Isi DATABASE_URL untuk PostgreSQL, BOOTSTRAP_ADMIN_EMAIL dan BOOTSTRAP_ADMIN_PASSWORD (10–128 karakter) untuk akses admin pertama, serta DEVICE_TOKEN yang sama dengan firmware. APP_URL dapat diisi untuk domain khusus. Tanpa override, produksi menggunakan VERCEL_PROJECT_PRODUCTION_URL. Simpan rahasia hanya di environment server.
 
-Jika frontend dikerjakan dengan hot reload, jalankan backend secara terpisah pada port 4173 lalu `npm run dev`. Setup Google OAuth lokal tetap menggunakan origin backend sebagai redirect resmi.
+Admin awal masuk langsung dengan kredensial bootstrap. Anggota mendaftar dengan nama, email dan kata sandi. Admin memeriksa pemilik akun lalu mengaktifkan akses melalui Panel Admin. Setelah itu anggota dapat masuk. Kata sandi disimpan menggunakan scrypt dengan salt acak.
 
+Piket berlangsung Senin–Jumat dan presensi ekskul berlangsung Sabtu (WIB). Foto baru disimpan di PostgreSQL. Foto unggahan versi lama membutuhkan direktori STORAGE_DIR asalnya.
 ## Struktur sumber
 
 | Folder | Isi |
 |---|---|
-| `frontend/` | Vite, ES modules, Tailwind CSS, navigasi ikon, grafik kehadiran, logo dan favicon, dialog admin |
+| `frontend/` | Komponen portal, ES modules, Tailwind CSS, navigasi ikon, grafik kehadiran, logo dan favicon, dialog admin |
 | `server/` | Express, OAuth Google, sesi dan RBAC, upload foto, webhook dan heartbeat |
 | `database/schema.sql` | Skema, constraint, dan indeks PostgreSQL |
 | `firmware/` | Sketch Arduino/C++, template pengaturan, wiring dan enrollment ESP32-C1 |
@@ -45,7 +41,6 @@ Jika frontend dikerjakan dengan hot reload, jalankan backend secara terpisah pad
 - [Rancangan arsitektur dan kontrak REST](ARCHITECTURE.md)
 - [Panduan firmware dan sensor fingerprint](firmware/README.md)
 - [Skema SQL](database/schema.sql)
-- [Dokumentasi Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect)
 
 ### Kredit aset demo
 
