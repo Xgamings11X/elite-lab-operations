@@ -163,5 +163,5 @@ html[data-motion="calm"] :is(.club-core,.page-head,.auth-panel){animation:quiet-
 .club-intro{position:relative;z-index:1}
 .orbit-one{animation:elite-orbit 10s linear infinite}.orbit-two{animation:elite-orbit 7s linear infinite reverse}
 @keyframes elite-orbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){.orbit-one,.orbit-two{animation:none}.club-emblem .club-core{animation:emblem-glow 3.6s ease-in-out infinite alternate}.loading-tiles i{animation-name:emblem-glow}}
+@media(prefers-reduced-motion:reduce){.orbit-one,.orbit-two{animation:none}html[data-motion="calm"] .club-emblem .club-core{animation:emblem-glow 3.6s ease-in-out infinite alternate}.loading-tiles i{animation-name:emblem-glow}}
 @keyframes emblem-glow{from{opacity:.65}to{opacity:1}}
