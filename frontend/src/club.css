@@ -150,3 +150,18 @@ html[data-motion="calm"] .route-meter i{width:100%;animation:quiet-light .9s eas
 html[data-motion="calm"] :is(.club-core,.page-head,.auth-panel){animation:quiet-entry .28s ease-out}
 @keyframes quiet-light{from{opacity:.5}to{opacity:1}}
 @keyframes quiet-entry{from{opacity:.75}to{opacity:1}}
+
+#transition.boot-grid,#transition.route-loading{visibility:visible;display:grid;place-items:center;background:linear-gradient(90deg,#aebcce12 1px,transparent 1px),linear-gradient(#aebcce12 1px,transparent 1px),#151b2bf2;background-size:44px 44px;pointer-events:none}
+#transition.boot-grid{animation:boot-dismiss .2s ease-out 2s forwards}
+@keyframes boot-dismiss{to{opacity:0;visibility:hidden}}
+.loading-plaque{display:grid;justify-items:center;gap:10px;color:#fff4df;font:600 1rem var(--font-mono);letter-spacing:.16em}
+.loading-plaque .route-label{position:static;background:none;border:0;padding:0;color:#d1d6df;letter-spacing:0}
+.loading-tiles{display:grid;grid-template-columns:repeat(3,11px);gap:4px;margin-bottom:5px}
+.loading-tiles i{height:11px;background:#ffa854;border-radius:2px;animation:tile-wave .78s ease-in-out infinite alternate}
+@keyframes tile-wave{from{opacity:.36;transform:scale(.75)}to{opacity:1;transform:scale(1)}}
+.club-emblem,.public-hero .club-emblem{z-index:0;pointer-events:none}
+.club-intro{position:relative;z-index:1}
+.orbit-one{animation:elite-orbit 10s linear infinite}.orbit-two{animation:elite-orbit 7s linear infinite reverse}
+@keyframes elite-orbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.orbit-one,.orbit-two{animation:none}.club-emblem .club-core{animation:emblem-glow 3.6s ease-in-out infinite alternate}.loading-tiles i{animation-name:emblem-glow}}
+@keyframes emblem-glow{from{opacity:.65}to{opacity:1}}

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import multer from 'multer';
 import sharp from 'sharp';
 import { z } from 'zod';
-import { admin,fail } from './auth.js';
+import { admin,fail,token,digest } from './auth.js';
 import { first,rows,localDate,weekday } from './db.js';
 import { recordAdminChange } from './operations.js';
 
@@ -144,7 +144,13 @@ export function registerRoutes(app,db,cfg) {
     });
     res.json({id:memberId});
   });
-  app.get('/api/admin/users',admin,async(req,res)=>res.json(await rows(db,'SELECT id,email,name,role,is_active,(password_hash IS NOT NULL) AS signed_in FROM users ORDER BY is_active DESC,email')));
+  app.post('/api/admin/users/:id/recovery',admin,async(req,res)=>{
+    const recovery=token();
+    const target=await first(db,"UPDATE users SET recovery_hash=$2,recovery_expires=now()+interval '15 minutes' WHERE id=$1 AND NOT owner_demo AND (role='viewer' OR id=$3) RETURNING id",id.parse(req.params.id),digest(recovery),req.user.id);
+    if(!target) throw fail(403,'Pemulihan akun ini tidak tersedia.');
+    res.json({recovery});
+  });
+  app.get('/api/admin/users',admin,async(req,res)=>res.json(await rows(db,'SELECT id,email,name,role,is_active,(password_hash IS NOT NULL) AS signed_in FROM users WHERE NOT owner_demo ORDER BY is_active DESC,email')));
   app.post('/api/admin/users',admin,async(req,res)=>{
     const item=z.object({email:mail,role}).parse(req.body);
     const result=await db.transaction(async tx=>{

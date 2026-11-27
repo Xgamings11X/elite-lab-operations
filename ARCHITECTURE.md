@@ -25,7 +25,7 @@ Semua rute berikut berawalan `/api`. POST/PUT/PATCH/DELETE browser menggunakan o
 |---|---|
 | `GET /session` | Publik. Mengembalikan pengguna aktif atau null dan status demo |
 | `POST /auth/signup`, `POST /auth/signin` | Daftar dengan nama, email dan kata sandi. Masuk menggunakan email dan kata sandi |
-| `POST /auth/demo` | Lokal demo. JSON `role` |
+| `POST /auth/reset` | Pemulihan menggunakan email, kode sekali pakai dan kata sandi baru. Sesi lama dicabut. |
 | `POST /auth/logout` | Mengakhiri sesi browser |
 | `GET /overview` | Pengguna aktif. Ringkasan hari ini, perangkat, petugas, laporan |
 | `GET /insights` | Pengguna aktif. Empat belas hari rekap dalam WIB dan sampai enam aktivitas dari tujuh hari terakhir |

@@ -14,7 +14,7 @@ export async function passwordHash(password) {
   return salt+':'+(await derive(password,salt,64)).toString('hex');
 }
 
-export function authentication(app,db,cfg,demoUsers) {
+export function authentication(app,db,cfg) {
 
   const options = { httpOnly:true,sameSite:'lax',secure:cfg.url.protocol==='https:',path:'/' };
   async function openSession(req,res,id) {
@@ -32,33 +32,48 @@ export function authentication(app,db,cfg,demoUsers) {
   async function current(req) {
     const raw = cookie(req,'elite_session');
     if (!raw) return null;
-    return await first(db,`SELECT u.id,u.email,u.role,u.name FROM sessions s JOIN users u ON u.id=s.user_id
+    return await first(db,`SELECT u.id,u.email,u.role,u.name,u.owner_demo FROM sessions s JOIN users u ON u.id=s.user_id
       WHERE s.token_hash=$1 AND s.expires_at > now() AND u.is_active`,digest(raw)) ?? null;
   }
   app.get('/api/session',async(req,res)=>res.json({user:await current(req),demo:cfg.demo,device_id:cfg.device}));
   app.post('/api/auth/logout',async(req,res)=>{await dropSession(req,res);res.sendStatus(204);});
 
-  if (cfg.demo) {
-    app.post('/api/auth/demo',async(req,res)=>{
-      const role = req.body?.role;
-      if (!['admin','viewer'].includes(role)) throw fail(400,'Pilih peran demo.');
-      await openSession(req,res,demoUsers[role]);
-      res.json({ok:true});
-    });
-  }
   const credentials=z.object({email:z.string().trim().toLowerCase().email().max(254),password:z.string().min(1).max(128)});
   app.post('/api/auth/signup',async(req,res)=>{
-    const {email,name,password}=credentials.extend({name:z.string().trim().min(2).max(120),password:z.string().min(10).max(128)}).parse(req.body);
+    const {email,name,password}=credentials.extend({name:z.string().trim().min(2).max(120),password:z.string().min(8).max(128)}).parse(req.body);
+    if(email===cfg.demoEmail) throw fail(409,'Email sudah digunakan.');
+    const recovery=token();
     const hash=await passwordHash(password);
-    const account=await first(db,`INSERT INTO users(email,name,password_hash,role,is_active) VALUES ($1,$2,$3,'viewer',false)
-      ON CONFLICT(email) DO UPDATE SET password_hash=excluded.password_hash,name=excluded.name,is_active=false,role='viewer'
-      WHERE users.password_hash IS NULL AND users.role='viewer' AND users.is_active RETURNING id`,email,name,hash);
+    const account=await first(db,`INSERT INTO users(email,name,password_hash,recovery_hash,role,is_active) VALUES ($1,$2,$3,$4,'viewer',false)
+      ON CONFLICT(email) DO UPDATE SET password_hash=excluded.password_hash,recovery_hash=excluded.recovery_hash,name=excluded.name,is_active=false,role='viewer'
+      WHERE users.password_hash IS NULL AND users.role='viewer' AND users.is_active AND NOT users.owner_demo RETURNING id`,email,name,hash,digest(recovery));
     if(!account) throw fail(409,'Email sudah terdaftar. Gunakan formulir masuk atau hubungi admin.');
-    res.status(201).json({ok:true});
+    res.status(201).json({recovery});
+  });
+  app.post('/api/auth/reset',async(req,res)=>{
+    const {email,password,code}=credentials.extend({password:z.string().min(8).max(128),code:z.string().trim().min(1).max(100)}).parse(req.body);
+    const recovery=token();
+    const hash=await passwordHash(password);
+    await db.transaction(async tx=>{
+      const user=await first(tx,`UPDATE users SET password_hash=$3,recovery_hash=$4,recovery_expires=NULL
+        WHERE email=$1 AND recovery_hash=$2 AND NOT owner_demo AND (recovery_expires IS NULL OR recovery_expires>now()) RETURNING id`,
+        email,digest(code),hash,digest(recovery));
+      if(!user) throw fail(400,'Email atau kode pemulihan tidak cocok atau sudah kedaluwarsa.');
+      await rows(tx,'DELETE FROM sessions WHERE user_id=$1',user.id);
+    });
+    res.json({recovery});
   });
   app.post('/api/auth/signin',async(req,res)=>{
     const {email,password}=credentials.parse(req.body);
-    const user=await first(db,'SELECT id,is_active,password_hash FROM users WHERE email=$1',email);
+    if(email===cfg.demoEmail && cfg.demoPassword){
+      if(!timingSafeEqual(Buffer.from(digest(password)),Buffer.from(digest(cfg.demoPassword)))) throw fail(401,'Email atau kata sandi salah.');
+      const demoUser=await first(db,`INSERT INTO users(email,name,role,owner_demo) VALUES($1,'Demo ELITE','viewer',true)
+        ON CONFLICT(email) DO UPDATE SET role='viewer' WHERE users.owner_demo AND users.is_active RETURNING id`,email);
+      if(!demoUser) throw fail(403,'Alamat demo tidak tersedia.');
+      await openSession(req,res,demoUser.id);
+      return res.json({ok:true});
+    }
+    const user=await first(db,'SELECT id,is_active,password_hash FROM users WHERE email=$1 AND NOT owner_demo',email);
     const [salt,expected]=(user?.password_hash || 'unknown:'+ '0'.repeat(128)).split(':');
     const actual=await derive(password,salt,64);
     if(!timingSafeEqual(actual,Buffer.from(expected,'hex')) || !user?.password_hash) throw fail(401,'Email atau kata sandi salah.');

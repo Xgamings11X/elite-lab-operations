@@ -36,9 +36,6 @@ function watchSections(){
     reveals.observe(item);
   }
 }
-function animateSetup() {
-  overlay.innerHTML='<div class="route-meter"><i></i></div><span class="route-label"></span>';
-}
 async function transition(task,first=false) {
   const current=++transitionVersion;
 
@@ -220,6 +217,9 @@ function syncTimes() {
   form.elements.check_out_time.disabled=!present;
   form.elements.check_in_time.required=present;
 }
+function showRecovery(code,temporary=false){
+  showDialog('Kode pemulihan', '<p>'+(temporary?'Sampaikan kode secara privat setelah identitas pemilik akun diperiksa. Berlaku 15 menit.':'Simpan kode sekali pakai ini di tempat pribadi untuk memulihkan akunmu.')+'</p><label>Kode pemulihan<input readonly value="'+h(code)+'" style="width:100%" /></label>'+btn('Sudah disimpan','close','primary'));
+}
 function renderAccount(mode) {
   root.innerHTML=login(state.session.demo,mode);
   watchSections();
@@ -232,20 +232,22 @@ root.addEventListener('submit',async event=>{
   if(submit.disabled) return;
   const values=Object.fromEntries(new FormData(form));
   const signup=form.dataset.mode==='signup';
+  const originalLabel=submit.textContent;
   submit.disabled=true;
   submit.textContent=signup?'Mendaftarkan…':'Memeriksa…';
   form.setAttribute('aria-busy','true');
   try {
-    await api('/auth/'+form.dataset.mode,'POST',values);
-    if(signup) {
+    const result=await api('/auth/'+form.dataset.mode,'POST',values);
+    if(result.recovery) {
       renderAccount('signin');
       const next=$('#account-form');
       next.elements.email.value=values.email;
-      next.querySelector('.auth-message').textContent='Akun terdaftar. Setelah admin mengaktifkan aksesmu, masuk di sini.';
-      next.elements.password.focus();
+      next.querySelector('.auth-message').textContent=signup?'Akun terdaftar. Masuk setelah admin mengaktifkan akses.':'Kata sandi sudah diganti. Silakan masuk kembali.';
+      showRecovery(result.recovery);
+
     } else {state.page='';await getSession();}
   } catch(error) {form.querySelector('.auth-message').textContent=error.message;}
-  finally {submit.disabled=false;submit.textContent=signup?'Daftar akun':'Masuk';form.removeAttribute('aria-busy');}
+  finally {submit.disabled=false;submit.textContent=originalLabel;form.removeAttribute('aria-busy');}
 });
 async function getSession(boot=false) {
   state.session=await api('/session');
@@ -283,11 +285,16 @@ document.addEventListener('click',async event=>{
       $('.trend-selection').textContent=date+' · '+present+' hadir · '+excused+' izin atau dispensasi';
       return;
     }
-    if(action==='roles') return showDialog('Ganti peran demo','<div class="login-actions">'+btn('Mode Admin','role:admin','primary','shield-check')+btn('Mode Pelihat','role:viewer','outline','users')+'</div>');
+    if(action==='recovery'){
+      const person=state.items.find(p=>p.id===Number(value));
+      if(!person)return;
+      showDialog('Pemulihan akun', '<p>Verifikasi identitas pemilik '+h(person.email)+' sebelum memberikan kode. Kode pengganti berlaku 15 menit.</p>'+btn('Buat kode','issueRecovery:'+value,'primary'));return;
+    }
+    if(action==='issueRecovery'){busy=true;const result=await api('/admin/users/'+Number(value)+'/recovery','POST',{});showRecovery(result.recovery,true);return;}
     busy=true;
-    if(action==='role'||action==='logout') {
+    if(action==='logout') {
       if(dialog.open) dialog.close();
-      await json('/auth/'+(action==='role'?'demo':'logout'),'POST',action==='role'?{role:value}:null);
+      await json('/auth/logout','POST',null);
       state.page='';
       state.tab='queue';
       history.replaceState(null,'',location.pathname+'#/beranda');
@@ -394,7 +401,6 @@ setInterval(async()=>{
     } catch { /* Browser may be offline. */ }
   }
 },12000);
-animateSetup();
 applyMotion();
 transition(()=>getSession(true),true)
   .catch(error=>{overlay.className='';state.session={user:null,demo:false};renderAccount('signup');notice('Koneksi ke layanan anggota sedang terganggu.',true);});

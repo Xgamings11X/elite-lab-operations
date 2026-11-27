@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS users (
   invited_by integer REFERENCES users(id),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_hash text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_expires timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS owner_demo boolean NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash text PRIMARY KEY,

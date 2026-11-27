@@ -7,7 +7,7 @@ import { createApp } from '../server/index.js';
 
 test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
   t.mock.timers.enable({apis:['Date'],now:new Date('2026-11-28T03:00:00Z')});
-  const instance=await createApp({},true);
+  const instance=await createApp({OWNER_DEMO_EMAIL:'demo@example.test',OWNER_DEMO_PASSWORD:'demo-only-pass'},true,{admin:'local-admin-test',viewer:'local-viewer-test'});
   const server=instance.app.listen(0,'127.0.0.1');
   await once(server,'listening');
   t.after(async()=>{
@@ -24,7 +24,7 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
     const result=response.headers.get('content-type')?.includes('json')?await response.json():await response.arrayBuffer();
     return {status:response.status,result,cookie:response.headers.getSetCookie().find(value=>value.startsWith('elite_session=')&&!value.startsWith('elite_session=;'))?.split(';')[0]};
   }
-  const login=(role)=>call('/auth/demo',{method:'POST',body:{role}});
+  const login=(role)=>call('/auth/signin',{method:'POST',body:{email:role+'@gmail.com',password:'local-'+role+'-test'}});
   assert.equal((await call('/overview')).status,401);
   assert.equal((await call('/auth/demo',{method:'POST',body:{role:'admin'},headers:{Origin:'https://example.org'}})).status,403);
   const {cookie:admin}=await login('admin'),{cookie:viewer}=await login('viewer');
@@ -97,12 +97,28 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
   assert.equal(updated.check_in_time,null);
   assert.equal(updated.check_out_time,null);
   assert.equal((await scan({body:{event_id:randomUUID()}})).result.type,'UNCHANGED');
-  const account={email:'undangan.uji@gmail.com',password:'kata-sandi-uji',name:'Anggota Uji'};
-  assert.equal((await call('/auth/signup',{method:'POST',body:account})).status,201);
+  const account={email:'undangan.uji@gmail.com',password:'abcdefgh',name:'Anggota Uji'};
+  const registered=await call('/auth/signup',{method:'POST',body:account});
+  assert.equal(registered.status,201);
   assert.equal((await call('/auth/signin',{method:'POST',body:account})).status,403);
   const invited=await call('/admin/users',{method:'POST',cookie:admin,body:{email:'undangan.uji@gmail.com',role:'viewer'}});
   assert.equal(invited.status,201);
-  assert.ok((await call('/auth/signin',{method:'POST',body:account})).cookie);
+  const beforeReset=await call('/auth/signin',{method:'POST',body:account});
+  assert.ok(beforeReset.cookie);
+  const reset={email:account.email,password:'new-pass',code:registered.result.recovery};
+  assert.equal((await call('/auth/reset',{method:'POST',body:{...reset,password:'1234567'}})).status,400);
+  assert.ok((await call('/auth/reset',{method:'POST',body:reset})).result.recovery);
+  assert.equal((await call('/overview',{cookie:beforeReset.cookie})).status,401);
+  assert.equal((await call('/auth/reset',{method:'POST',body:reset})).status,400);
+  assert.equal((await call('/auth/signin',{method:'POST',body:account})).status,401);
+  assert.equal((await call('/auth/signin',{method:'POST',body:reset})).status,200);
+  const demoLogin=await call('/auth/signin',{method:'POST',body:{email:'demo@example.test',password:'demo-only-pass'}});
+  assert.ok(demoLogin.cookie);
+  assert.equal((await call('/overview',{cookie:demoLogin.cookie})).result.summary.members,1);
+  assert.equal((await call('/admin/users',{cookie:demoLogin.cookie})).status,403);
+  assert.equal((await call('/admin/users/'+invited.result.id+'/recovery',{method:'POST',cookie:viewer})).status,403);
+  assert.ok((await call('/admin/users/'+invited.result.id+'/recovery',{method:'POST',cookie:admin})).result.recovery);
+
   assert.equal((await call('/admin/users/'+invited.result.id,{method:'DELETE',cookie:admin})).status,204);
   const users=await call('/admin/users',{cookie:admin});
   const viewerId=users.result.find(user=>user.email==='viewer@gmail.com').id;

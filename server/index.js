@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { mkdtemp,mkdir,rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { ZodError } from 'zod';
-import { authentication,fail,passwordHash } from './auth.js';
+import { authentication,fail,passwordHash,digest } from './auth.js';
 import { database,rows } from './db.js';
 import { seedDemo } from './demo.js';
 import { iot } from './iot.js';
@@ -14,15 +14,15 @@ import { registerRoutes } from './routes.js';
 import { registerOperations } from './operations.js';
 
 const root = process.cwd();
-export async function createApp(env=process.env,demo=false) {
+export async function createApp(env=process.env,demo=false,fixturePasswords={}) {
   const productionDomain = !demo && env.VERCEL_PROJECT_PRODUCTION_URL;
   const url = new URL(env.APP_URL || (productionDomain ? 'https://' + productionDomain : (demo?'http://localhost:4173':'http://localhost:3000')));
   const host=env.HOST||'127.0.0.1';
   const loopback=['localhost','127.0.0.1','[::1]'].includes(url.hostname);
   if (url.protocol!=='https:' && !(url.protocol==='http:' && loopback)) throw Error('APP_URL harus HTTPS di luar loopback.');
   if (demo && (host!=='127.0.0.1'||!loopback)) throw Error('Demo hanya untuk loopback.');
-  if (!demo && (!env.DATABASE_URL || !env.BOOTSTRAP_ADMIN_EMAIL?.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) || (env.BOOTSTRAP_ADMIN_PASSWORD?.length??0)<10 || env.BOOTSTRAP_ADMIN_PASSWORD.length>128)) throw Error('Lengkapi DATABASE_URL, email dan kata sandi admin (10–128 karakter).');
-  const cfg={demo,url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C1-LAB-01',
+  if (!demo && (!env.DATABASE_URL || !env.BOOTSTRAP_ADMIN_EMAIL?.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) || (env.BOOTSTRAP_ADMIN_PASSWORD?.length??0)<8 || env.BOOTSTRAP_ADMIN_PASSWORD.length>128)) throw Error('Lengkapi DATABASE_URL, email dan kata sandi admin (8–128 karakter).');
+  const cfg={demo,demoEmail:env.OWNER_DEMO_EMAIL?.trim().toLowerCase(),demoPassword:env.OWNER_DEMO_PASSWORD?.length>=8 && env.OWNER_DEMO_PASSWORD.length<=128?env.OWNER_DEMO_PASSWORD:null,url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C1-LAB-01',
     deviceToken:demo?'demo-local-device-token':(env.DEVICE_TOKEN?.length>=32?env.DEVICE_TOKEN:null),
     storage: demo?await mkdtemp(join(tmpdir(),'elite-demo-')):resolve(env.STORAGE_DIR||join(root,'storage')),root};
   const storageFromDist=relative(join(root,'dist'),cfg.storage);
@@ -31,14 +31,17 @@ export async function createApp(env=process.env,demo=false) {
   const db=await database(demo?null:env.DATABASE_URL);
   if (!env.VERCEL) await mkdir(cfg.storage,{recursive:true});
   await rows(db,'INSERT INTO devices(id) VALUES ($1) ON CONFLICT DO NOTHING',cfg.device);
-  let demoUsers;
-  if (demo) demoUsers=await seedDemo(db,cfg.device);
+  if (demo) {
+    const accounts=await seedDemo(db,cfg.device);
+    for(const role of ['admin','viewer']) if(fixturePasswords[role]) await rows(db,'UPDATE users SET password_hash=$2 WHERE id=$1',accounts[role],await passwordHash(fixturePasswords[role]));
+  }
   else {
     const email=env.BOOTSTRAP_ADMIN_EMAIL.trim().toLowerCase();
     const existing=(await rows(db,'SELECT password_hash FROM users WHERE email=$1',email))[0];
     if(!existing?.password_hash) await rows(db,`INSERT INTO users(email,role,password_hash) VALUES ($1,'admin',$2)
       ON CONFLICT(email) DO UPDATE SET password_hash=excluded.password_hash WHERE users.role='admin' AND users.password_hash IS NULL`,
       email,await passwordHash(env.BOOTSTRAP_ADMIN_PASSWORD));
+    if(env.BOOTSTRAP_ADMIN_RECOVERY_CODE?.length>=32 && env.BOOTSTRAP_ADMIN_RECOVERY_CODE.length<=100) await rows(db,"UPDATE users SET recovery_hash=$2 WHERE email=$1 AND role='admin' AND recovery_hash IS NULL",email,digest(env.BOOTSTRAP_ADMIN_RECOVERY_CODE));
   }
   const app=express();
   app.disable('x-powered-by');
@@ -57,8 +60,22 @@ export async function createApp(env=process.env,demo=false) {
   app.use('/api/iot',rateLimit({windowMs:60000,limit:180,message:{error:'Terlalu banyak permintaan perangkat.'}}));
   app.use(express.json({limit:'32kb'}));
   iot(app,db,cfg);
-  const signedIn=authentication(app,db,cfg,demoUsers);
+  const signedIn=authentication(app,db,cfg);
   app.use('/api',signedIn);
+  app.use('/api',(req,res,next)=>{
+    if(!req.user.owner_demo) return next();
+    if(!cfg.demoPassword || req.user.email!==cfg.demoEmail) return res.sendStatus(403);
+    const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
+    const member={id:1,member_id:1,full_name:'Anggota Contoh',class_name:'XI',division:'Teknik Elektronika'};
+    const day=new Date(today+'T12:00:00Z').getUTCDay();
+    const sample={
+      '/overview':{today,summary:{members:1,present:day===6?1:0},picket:day>=1&&day<=5?[member]:[],reports:[]},
+      '/attendance':new Date(String(req.query.date)+'T12:00:00Z').getUTCDay()===6?[{...member,status:'present',check_in_time:'08:00',check_out_time:null}]:[],
+      '/picket':[member],'/reports':[],'/insights':{trend:[{date:today,present:day===6?1:0,excused:0}],activity:[]}
+    };
+    if(req.method==='GET' && Object.hasOwn(sample,req.path)) return res.json(sample[req.path]);
+    res.status(403).json({error:'Akun demo hanya dapat melihat data contoh.'});
+  });
   registerRoutes(app,db,cfg);
   registerOperations(app,db);
   app.use('/api',(req,res)=>res.status(404).json({error:'Endpoint tidak ditemukan.'}));

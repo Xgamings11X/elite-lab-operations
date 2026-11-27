@@ -12,7 +12,7 @@ npm run build
 npm run demo
 ```
 
-Buka [http://127.0.0.1:4173](http://127.0.0.1:4173). Pilih **Masuk sebagai Admin** atau **Masuk sebagai Pelihat**. Tombol **Mode demo** berpindah peran. Demo hanya bisa dijalankan di loopback dan memakai data fiktif. Data demo kembali ke kondisi awal setelah proses server dihentikan.
+Buka http://127.0.0.1:4173. Isi OWNER_DEMO_EMAIL dan OWNER_DEMO_PASSWORD di environment server untuk masuk melalui formulir biasa sebagai pelihat data contoh. Data sesi demo lokal kembali ke kondisi awal saat server dihentikan.
 
 ```powershell
 npm test
@@ -22,9 +22,11 @@ Pengujian integrasi mengecek tren absensi 14 hari, perlindungan riwayat admin, a
 
 ## Konfigurasi produksi
 
-Gunakan preset Next.js pada Vercel. Isi DATABASE_URL untuk PostgreSQL, BOOTSTRAP_ADMIN_EMAIL dan BOOTSTRAP_ADMIN_PASSWORD (10–128 karakter) untuk akses admin pertama, serta DEVICE_TOKEN yang sama dengan firmware. APP_URL dapat diisi untuk domain khusus. Tanpa override, produksi menggunakan VERCEL_PROJECT_PRODUCTION_URL. Simpan rahasia hanya di environment server.
+Gunakan preset Next.js pada Vercel. Isi DATABASE_URL untuk PostgreSQL, BOOTSTRAP_ADMIN_EMAIL dan BOOTSTRAP_ADMIN_PASSWORD (8–128 karakter) untuk akses admin pertama, serta DEVICE_TOKEN yang sama dengan firmware. APP_URL dapat diisi untuk domain khusus. Tanpa override, produksi menggunakan VERCEL_PROJECT_PRODUCTION_URL. Simpan rahasia hanya di environment server.
 
 Admin awal masuk langsung dengan kredensial bootstrap. Anggota mendaftar dengan nama, email dan kata sandi. Admin memeriksa pemilik akun lalu mengaktifkan akses melalui Panel Admin. Setelah itu anggota dapat masuk. Kata sandi disimpan menggunakan scrypt dengan salt acak.
+
+Setelah daftar, simpan kode pemulihan sekali pakai. Gunakan Masuk → Lupa kata sandi untuk mengganti sandi dan menutup sesi lama. Admin dapat membuat kode pengganti selama 15 menit melalui daftar akses setelah memeriksa identitas pemilik akun. Untuk akun demo pemilik, gunakan alamat terpisah serta kata sandi 8–128 karakter di environment Production Vercel, lalu redeploy.
 
 Piket berlangsung Senin–Jumat dan presensi ekskul berlangsung Sabtu (WIB). Foto baru disimpan di PostgreSQL. Foto unggahan versi lama membutuhkan direktori STORAGE_DIR asalnya.
 ## Struktur sumber

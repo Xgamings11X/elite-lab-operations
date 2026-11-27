@@ -28,7 +28,7 @@ export function shell(user,demo,current) {
       <button class="menu icon-button" aria-controls="sidebar" aria-expanded="false" data-action="menu" aria-label="Buka menu">${icon('menu')}</button>
       <a class="mobile-brand" href="#/beranda" aria-label="ELITE Beranda">${logo()}</a><div class="crumb"><span>Ruang kerja</span>${icon('chevron-right',14)}<strong>${label}</strong></div>
       <div class="top-right"><button class="search-trigger" type="button" data-action="command" aria-label="Cari halaman">${icon('search',17)}<span>Cari halaman</span><kbd>${/Mac/i.test(navigator.platform)?'⌘':'Ctrl'} K</kbd></button>
-      ${demo?'<button class="demo-label" data-action="roles" title="Ganti peran demo">Demo</button>':''}<details class="account"><summary><span class="profile-avatar">${h(initials(user.name||user.email))}</span><span class="account-text"><strong>${h(user.name||user.email)}</strong><small>${user.role==='admin'?'Admin':'Pelihat'}</small></span>${icon('chevron-down',15)}</summary><div class="account-menu"><span>${h(user.email)}</span>${demo?btn('Ganti peran demo','roles','outline','users'):''}${btn('Keluar','logout','outline','log-out')}</div></details></div>
+      ${user.owner_demo?'<span class="demo-label">Data contoh</span>':''}<details class="account"><summary><span class="profile-avatar">${h(initials(user.name||user.email))}</span><span class="account-text"><strong>${h(user.name||user.email)}</strong><small>${user.role==='admin'?'Admin':'Pelihat'}</small></span>${icon('chevron-down',15)}</summary><div class="account-menu"><span>${h(user.email)}</span>${btn('Keluar','logout','outline','log-out')}</div></details></div>
     </header><main id="main" tabindex="-1" class="content"></main>${portalFooter(user)}</div></div>`;
 }
 
@@ -41,17 +41,17 @@ function programCards(){
   return '<section class="field-guide" id="kegiatan"><h2>Kegiatan di lab</h2><div class="guide-grid">'+programs.map(([glyph,title,copy])=>'<article>'+icon(glyph,24)+'<h3>'+title+'</h3><p>'+copy+'</p></article>').join('')+'</div></section><section class="week-board"><h2>Pekan di ELITE</h2><div class="week-grid">'+[...days,'Sabtu'].map((d,i)=>'<div><strong>'+d+'</strong><small>'+(i===5?'Absensi ekskul':'Piket lab')+'</small></div>').join('')+'</div></section>';
 }
 export function login(demo,mode='signup') {
-  const signup=mode==='signup';
+  const signup=mode==='signup', reset=mode==='reset';
   return `<main class="public-site" id="main" tabindex="-1"><header class="public-nav"><a href="#main" aria-label="ELITE">${logo()}</a><button class="btn outline" data-action="authMode:signin">Masuk</button></header>
   <div class="public-body"><div class="public-grid"><section class="club-hero public-hero"><div class="club-intro"><p class="club-kicker"><i></i> Robotik SMKN 2 Surabaya</p><h1>Electronic<br>Innovation<br><em>Center.</em></h1><p class="club-lede">Dari meja rakit sampai uji coba, ini ruang kegiatan anggota robotik SMKN 2 Surabaya.</p></div>
   <div class="club-emblem" aria-hidden="true"><i class="orbit orbit-one"></i><i class="orbit orbit-two"></i><div class="club-core">${icon('zap',54)}</div></div></section>
   <section class="auth-panel" id="akun"><div class="auth-tabs">${['signup','signin'].map((m,i)=>'<button type="button" aria-pressed="'+(m===mode)+'" data-action="authMode:'+m+'">'+['Daftar','Masuk'][i]+'</button>').join('')}</div>
-  <h2>${signup?'Buat akun anggota':'Masuk ke ELITE'}</h2><p>${signup?'Daftarkan akunmu. Admin ELITE akan mengaktifkan akses anggota.':'Gunakan email dan kata sandi yang sudah terdaftar.'}</p>
+  <h2>${signup?'Buat akun anggota':reset?'Pulihkan akun':'Masuk ke ELITE'}</h2><p>${signup?'Daftarkan akunmu. Admin ELITE akan mengaktifkan akses anggota.':reset?'Masukkan kode pemulihan yang kamu simpan saat mendaftar. Jika hilang, hubungi admin ELITE.':'Gunakan email dan kata sandi yang sudah terdaftar.'}</p>
   <form id="account-form" data-mode="${mode}">${signup?'<label>Nama lengkap<input name="name" autocomplete="name" required minlength="2" maxlength="120"></label>':''}
   <label>Email<input type="email" name="email" autocomplete="username" required maxlength="254"></label>
-  <label>Kata sandi<input type="password" name="password" autocomplete="${signup?'new-password':'current-password'}" required minlength="${signup?10:1}" maxlength="128"></label>
-  ${signup?'<small>Gunakan minimal 10 karakter.</small>':''}<p role="status" class="auth-message"></p><button type="submit" class="btn primary">${signup?'Daftar akun':'Masuk'} ${icon('arrow-right',16)}</button></form>
-  ${demo?'<details class="demo-entry"><summary>Coba portal demo</summary>'+btn('Masuk sebagai Admin','role:admin','outline')+btn('Masuk sebagai Pelihat','role:viewer','outline')+'</details>':''}</section></div>${programCards()}</div></main>${portalFooter(null)}`;
+  ${reset?'<label>Kode pemulihan<input name="code" autocomplete="off" required maxlength="100"></label>':''}<label>${reset?'Kata sandi baru':'Kata sandi'}<input type="password" name="password" autocomplete="${signup||reset?'new-password':'current-password'}" required minlength="${signup||reset?8:1}" maxlength="128"></label>
+  ${signup||reset?'<small>Gunakan minimal 8 karakter.</small>':''}<p role="status" class="auth-message"></p><button type="submit" class="btn primary">${signup?'Daftar akun':reset?'Simpan kata sandi baru':'Masuk'} ${icon('arrow-right',16)}</button></form>
+  ${mode==='signin'?btn('Lupa kata sandi?','authMode:reset','outline'):''}</section></div>${programCards()}</div></main>${portalFooter(null)}`;
 }
 const section=(title,subtitle,action='')=>`<div class="section-head"><div><h2>${title}</h2><p>${subtitle}</p></div>${action}</div>`;
 const heading=(label,title,subtitle,action='')=>`<div class="page-head"><div><p class="eyebrow"><i></i> ${label}</p><h1>${title}</h1><p>${subtitle}</p></div>${action}</div>`;
@@ -98,5 +98,5 @@ export function adminPanel(tab,data,user) {
   if(tab==='members') return head+section('Daftar Anggota','Kelola profil, jurusan, dan ID presensi anggota.',btn('Tambah anggota','member','primary','plus'))+
     (data.length?`<div class="table-wrap panel"><table><thead><tr><th>Anggota</th><th>ID presensi</th><th>Tindakan</th></tr></thead><tbody>${data.map(m=>`<tr><td><strong>${h(m.full_name)}</strong><small>${h(memberStudy(m))}</small></td><td class="mono">${m.fingerprint_id??'Belum terdaftar'}</td><td>${btn('Kelola ID','link:'+m.id,'outline','fingerprint')}</td></tr>`).join('')}</tbody></table></div>`:empty('Belum ada anggota.'));
   return head+section('Daftar akses email','Periksa identitas pendaftar sebelum mengaktifkan akses.',btn('Aktifkan akun','invite','primary','mail'))+
-    `<div class="table-wrap panel"><table><thead><tr><th>email</th><th>Peran</th><th>Akses</th><th>Tindakan</th></tr></thead><tbody>${data.map(u=>`<tr><td><strong>${h(u.email)}</strong><small>${h(u.name||'')}</small></td><td>${badge(u.role)}</td><td>${u.is_active?(u.signed_in?'Aktif':'Diundang'):'Nonaktif'}</td><td>${u.is_active&&u.id!==user.id?btn('Cabut akses','revoke:'+u.id,'outline'):'—'}</td></tr>`).join('')}</tbody></table></div>`;
+    `<div class="table-wrap panel"><table><thead><tr><th>email</th><th>Peran</th><th>Akses</th><th>Tindakan</th></tr></thead><tbody>${data.map(u=>`<tr><td><strong>${h(u.email)}</strong><small>${h(u.name||'')}</small></td><td>${badge(u.role)}</td><td>${u.is_active?(u.signed_in?'Aktif':'Diundang'):'Nonaktif'}</td><td>${u.role==='viewer'||u.id===user.id?btn('Kode pemulihan','recovery:'+u.id,'outline'):''} ${u.is_active&&u.id!==user.id?btn('Cabut akses','revoke:'+u.id,'outline'):'—'}</td></tr>`).join('')}</tbody></table></div>`;
 }
