@@ -96,9 +96,10 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C3',async t=>{
   assert.equal((await review('approved','')).status,409);
   assert.equal((await call('/reports?kind=piket',{cookie:viewer})).result[0].verification_status,'rejected');
 
-  const member=await call('/admin/members',{method:'POST',cookie:admin,body:{username:'anggota.uji',password:'anggota-pass',full_name:'Anggota Uji',class_name:'XI TEI',division:'Elektronik'}});
+  const member=await call('/admin/members',{method:'POST',cookie:admin,body:{fingerprint_id:98,username:'anggota.uji',password:'anggota-pass',full_name:'Anggota Uji',class_name:'XI TEI',division:'Elektronik'}});
   assert.equal(member.status,201);
   const memberId=member.result.id;
+  assert.equal((await call('/admin/members',{cookie:admin})).result.find(m=>m.id===memberId).fingerprint_id,98);
   assert.equal((await call('/admin/members/'+memberId+'/fingerprint',{method:'PATCH',cookie:admin,body:{fingerprint_id:99}})).status,200);
   const newManual={member_id:memberId,date:'2026-11-21',status:'excused',check_in_time:null,check_out_time:null,notes:''};
   assert.equal((await call('/attendance',{method:'PUT',cookie:admin,body:newManual})).status,200);
@@ -181,4 +182,17 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C3',async t=>{
   assert.equal(audit.status,200);
   assert.deepEqual(audit.result.map(event=>event.action),['access_revoked','access_revoked','access_granted','attendance_saved','attendance_saved','attendance_saved','fingerprint_linked','report_revision','attendance_saved']);
   assert.ok(audit.result.every(event=>event.actor_username==='admin'));
+});
+
+test('Login privat demo tidak membutuhkan database anggota',async t=>{
+  const instance=await createApp({APP_URL:'http://localhost:3000',OWNER_DEMO_USERNAME:'uji',OWNER_DEMO_PASSWORD:'demo-private-pass'});
+  const server=instance.app.listen(0,'127.0.0.1');
+  await once(server,'listening');
+  t.after(async()=>{await new Promise(resolve=>server.close(resolve));await instance.close();});
+  const login=username=>fetch('http://127.0.0.1:'+server.address().port+'/api/auth/demo-signin',{method:'POST',headers:{origin:'http://localhost:3000','content-type':'application/json'},body:JSON.stringify({username,password:'demo-private-pass'})});
+  assert.equal((await login('keliru')).status,401);
+  const success=await login('uji');
+  assert.equal(success.status,200);
+  const overview=await fetch('http://127.0.0.1:'+server.address().port+'/api/overview',{headers:{cookie:success.headers.getSetCookie()[0].split(';')[0]}});
+  assert.equal(overview.status,200);
 });

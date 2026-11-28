@@ -57,3 +57,5 @@ Panduan endpoint, relasi database, migrasi, dan pemeriksaan ujung ke ujung terse
 Dua foto contoh dibuat dengan ImageGen bawaan. Lokasinya `server/demo-assets/demo-rover.webp` dan `server/demo-assets/demo-workbench.webp`. Prompt ringkasnya adalah foto dokumenter tangan merakit rover di meja lab robotik sekolah vokasi Indonesia, serta foto dokumenter meja lab yang rapi setelah piket. Keduanya menggambarkan ruangan fiktif.
 
 Logo ELITE berasal dari file yang diberikan pemilik proyek. ImageGen bawaan dipakai dengan instruksi hanya menghapus latar putih serta mempertahankan bentuk huruf, warna oranye, dan teks ELECTRONIC INNOVATION CENTER. PNG transparan ada di `frontend/src/elite-logo.png`. Favicon memakai huruf E dari identitas tersebut.
+
+**Mencoba tanpa PostgreSQL.** Pilih Masuk ke demo dan gunakan OWNER_DEMO_USERNAME (default demo) serta OWNER_DEMO_PASSWORD. Tekan Ke Admin → Panel Admin → Daftar Anggota. Profil dan slot contoh tersimpan di browser ini. Untuk anggota nyata, gunakan login admin biasa. Slot dapat diisi saat tambah/edit anggota atau melalui Tautkan fingerprint setelah enrollment fisik berhasil.

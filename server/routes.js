@@ -14,7 +14,8 @@ const kind=z.enum(['piket','dokumentasi']);
 const id=z.coerce.number().int().min(1).max(2147483647);
 const time=z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 const upload=multer({limits:{fileSize:5*1024*1024,fields:4,files:1,fieldSize:2048}});
-const memberFields=z.object({full_name:z.string().trim().min(2).max(120),class_name:z.string().trim().min(1).max(50),division});
+const slot=z.number().int().min(1).max(65535).nullable();
+const memberFields=z.object({fingerprint_id:slot.optional(),full_name:z.string().trim().min(2).max(120),class_name:z.string().trim().min(1).max(50),division});
 const attendanceQuery=`SELECT a.id,a.member_id,a.date::text,a.check_in_time,a.check_out_time,a.method,a.status,a.notes,
   m.full_name,m.class_name,m.division FROM attendances a JOIN members m ON m.id=a.member_id WHERE a.date=$1 ORDER BY lower(m.division),lower(m.class_name),lower(m.full_name),m.id`;
 const picketQuery=`SELECT p.id,m.id AS member_id,m.full_name,m.class_name,m.division FROM picket_schedules p
@@ -172,7 +173,7 @@ export function registerRoutes(app,db,cfg) {
     const hash=await passwordHash(item.password);
     res.status(201).json(await db.transaction(async tx=>{
       const user=await first(tx,"INSERT INTO users(username,name,password_hash,role) VALUES($1,$2,$3,'viewer') RETURNING id",item.username,item.full_name,hash);
-      return first(tx,'INSERT INTO members(full_name,class_name,division,user_id) VALUES($1,$2,$3,$4) RETURNING id',item.full_name,item.class_name,item.division,user.id);
+      return first(tx,'INSERT INTO members(full_name,class_name,division,user_id,fingerprint_id,fingerprint_device) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',item.full_name,item.class_name,item.division,user.id,item.fingerprint_id??null,item.fingerprint_id?cfg.device:null);
     }));
   });
   app.patch('/api/admin/members/:id',admin,async(req,res)=>{
@@ -182,6 +183,7 @@ export function registerRoutes(app,db,cfg) {
     await db.transaction(async tx=>{
       const member=await first(tx,'UPDATE members SET full_name=$2,class_name=$3,division=$4 WHERE id=$1 AND is_active RETURNING user_id',id.parse(req.params.id),item.full_name,item.class_name,item.division);
       if(!member) throw fail(404,'Anggota tidak ditemukan.');
+      if(item.fingerprint_id!==undefined) await rows(tx,'UPDATE members SET fingerprint_id=$2,fingerprint_device=$3 WHERE id=$1',id.parse(req.params.id),item.fingerprint_id,item.fingerprint_id?cfg.device:null);
       if(member.user_id){
         await rows(tx,'UPDATE users SET name=$2,username=coalesce($3,username),password_hash=coalesce($4,password_hash) WHERE id=$1',member.user_id,item.full_name,item.username??null,hash);
         if(hash)await rows(tx,'DELETE FROM sessions WHERE user_id=$1',member.user_id);

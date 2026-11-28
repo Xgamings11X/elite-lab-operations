@@ -1,8 +1,9 @@
-import { api,compress } from './api.js';
+import { api as request,compress } from './api.js';
 import { badge,btn,evidenceImages,evidenceViews,empty,formatDate,h,icon,roster,memberStudy } from './ui.js';
 import { adminPanel,attendance,attendanceTable,availablePages,dashboard,devicePanel,gallery,home,login,pages,picket,picketAttendance,shell } from './views.js';
 import { commandLinks,recentActivity,trendChart } from './operations-view.js';
 
+import {demoMembers} from './demo-members.js';
 import {demoEvidence,saveDemoEvidence} from './demo-evidence.js';
 
 const $=(selector,el=document)=>el.querySelector(selector);
@@ -14,6 +15,31 @@ function applyMotion(){
 reduced.addEventListener('change',applyMotion);
 const state={day:0,date:'',statusFilter:'',attendanceSearch:'',period:7,insights:null,tab:'queue',page:'',items:[],photos:[],overview:null,session:null};
 let busy=false,selectedForm,noticeTimer,paintVersion=0;
+async function api(path,method='GET',body){
+  const user=state.session?.user;
+  if(user?.owner_demo && /^\/admin\/members(?:\/|$)/.test(path)){
+    if(user.role!=='admin')throw Error('Khusus Admin demo.');
+    return demoMembers(user.username,path,method,body);
+  }
+  const result=await request(path,method,body);
+  if(user?.owner_demo && ['/overview','/attendance','/picket','/picket-attendance'].includes(path.split('?')[0])){
+
+    const members=await demoMembers(user.username,'/admin/members','GET');
+    const scheduled=rows=>rows.flatMap(row=>{
+      const member=members.find(m=>m.id===row.member_id);
+      return member?[{...row,...member,member_id:member.id}]:[];
+    });
+    if(path==='/overview'){
+      result.summary.members=members.length;
+      if(!members.some(m=>m.id===1))result.summary.present=0;
+      result.picket=scheduled(result.picket);
+      if(user.role==='admin')result.summary.unenrolled=members.filter(m=>!m.fingerprint_id).length;
+    }else if(path.startsWith('/picket-attendance'))result.roster=scheduled(result.roster);
+    else if(path.startsWith('/picket?'))return scheduled(result);
+    else if(path.startsWith('/attendance?')&&result.length)return members.map(m=>({...result.find(r=>r.member_id===m.id),...m,member_id:m.id,status:result.find(r=>r.member_id===m.id)?.status||'unmarked'}));
+  }
+  return result;
+}
 const isAdmin=()=>state.session.user?.role==='admin';
 function notice(message,error=false) {
   const toast=$('#toast');
@@ -178,6 +204,10 @@ const currentDate=()=>state.overview.today;
 function persist(path,method,makeBody) {
   return async values=>{await api(path,method,makeBody(values));};
 }
+function slotField(member){
+  const guidance=state.session.user.owner_demo?'Masukkan nomor contoh untuk mencoba penautan.':'Daftarkan jari lewat Serial Monitor dengan perintah ENROLL diikuti nomor slot kosong, misalnya ENROLL 12. Setelah sensor berhasil menyimpan jari, isi nomor yang sama di sini.';
+  return field('Nomor slot fingerprint (opsional)','<input name="fingerprint_id" type="number" min="1" max="65535" value="'+h(member?.fingerprint_id)+'">')+'<p class="hint">'+guidance+' Kosongkan untuk menyimpan anggota tanpa tautan.</p>';
+}
 async function openAction(action,value) {
   const item=state.items.find(x=>x.id===Number(value));
   if(action==='invite') {
@@ -187,18 +217,18 @@ async function openAction(action,value) {
   }
   if(action==='member'||action==='editMember'){
     const existing=action==='editMember'?item:null;
+    const demo=state.session.user.owner_demo;
     showDialog(existing?'Edit anggota':'Tambah anggota',
       field('Nama lengkap','<input name="full_name" required maxlength="120" value="'+h(existing?.full_name)+'">')+
       field('Username','<input name="username" '+(existing&&!existing.username?'':'required')+' maxlength="40" value="'+h(existing?.username)+'">')+
-      field(existing?'Kata sandi baru (opsional)':'Kata sandi','<input name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" '+(existing?'':'required')+'>')+
+      (demo?'':field(existing?'Kata sandi baru (opsional)':'Kata sandi','<input name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" '+(existing?'':'required')+'>'))+
       field('Kelas','<input name="class_name" required maxlength="50" value="'+h(existing?.class_name)+'">')+
-      field('Jurusan','<input name="division" required maxlength="80" value="'+h(existing?.division)+'">'),
-      persist('/admin/members'+(existing?'/'+existing.id:''),existing?'PATCH':'POST',values=>Object.fromEntries(Object.entries(values).filter(([,v])=>v!==''))));
+      field('Jurusan','<input name="division" required maxlength="80" value="'+h(existing?.division)+'">')+slotField(existing),
+      persist('/admin/members'+(existing?'/'+existing.id:''),existing?'PATCH':'POST',values=>({...Object.fromEntries(Object.entries(values).filter(([,v])=>v!=='')),fingerprint_id:values.fingerprint_id?Number(values.fingerprint_id):null})));
   }
   if(action==='removeMember'&&item)showDialog('Hapus anggota','<p>Hapus '+h(item.full_name)+' dari daftar aktif dan cabut akses masuknya? Riwayat kehadiran tetap tersimpan.</p>',persist('/admin/members/'+item.id,'DELETE',()=>null),'Hapus anggota');
-  if(action==='link'&&item) showDialog('Tautkan ID presensi',`<p>${h(item.full_name)}</p>`+
-    field('Nomor registrasi','<input name="fingerprint_id" type="number" min="1" max="65535" value="'+(item.fingerprint_id??'')+'">')+
-    '<p class="hint">Masukkan nomor registrasi anggota. Kosongkan untuk melepas tautan.</p>',
+  if(action==='link'&&item) showDialog('Tautkan fingerprint',`<p>${h(item.full_name)}</p>`+
+    slotField(item),
     persist('/admin/members/'+item.id+'/fingerprint','PATCH',x=>({fingerprint_id:x.fingerprint_id?Number(x.fingerprint_id):null})));
   if(action==='revoke'&&item) showDialog('Cabut akses akun',`<p>Akhiri semua sesi dan cabut akses <strong>${h(item.username)}</strong>?</p>`,persist('/admin/users/'+item.id,'DELETE',()=>null),'Cabut akses');
   if(action==='picket-remove'&&item) showDialog('Hapus jadwal petugas',`<p>Hapus <strong>${h(item.full_name)}</strong> dari jadwal hari ini?</p>`,persist('/picket/'+item.id,'DELETE',()=>null),'Hapus jadwal');

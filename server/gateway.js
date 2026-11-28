@@ -20,12 +20,14 @@ export async function createApp(env=process.env,demo=false,fixtures={}){
   }
   let backend;
   app.use('/api',(req,res,next)=>{res.set('Cache-Control','no-store');next()});
-  app.post('/api/auth/signin',express.json({limit:'32kb'}),(req,res,next)=>{
-    if(!username || typeof req.body?.username!=='string' || req.body.username.trim().toLowerCase()!==username)return next('route');
+  app.post(['/api/auth/signin','/api/auth/demo-signin'],express.json({limit:'32kb'}),(req,res,next)=>{
+    const dedicated=req.path==='/api/auth/demo-signin';
+    if(dedicated && !key)return res.status(503).json({error:'Pemilik perlu mengisi OWNER_DEMO_PASSWORD pada konfigurasi server.'});
+    if(!dedicated && (!username || typeof req.body?.username!=='string' || req.body.username.trim().toLowerCase()!==username))return next('route');
     if(req.get('origin')!==origin)return res.status(403).json({error:'Asal permintaan tidak diizinkan.'});
     next();
   },rateLimit({windowMs:60000,limit:20,message:{error:'Coba kembali sebentar.'}}),(req,res)=>{
-    if(!key || typeof req.body.password!=='string' || !equal(req.body.password,password))return res.status(401).json({error:'Username atau kata sandi salah.'});
+    if(!key || typeof req.body.password!=='string' || !equal(req.body.password,password) || (req.path==='/api/auth/demo-signin' && (typeof req.body.username!=='string' || req.body.username.trim().toLowerCase()!==username)))return res.status(401).json({error:'Username atau kata sandi salah.'});
     demoCookie(res,'viewer',Date.now()+SESSION_MS);
     return res.json({ok:true});
   });
