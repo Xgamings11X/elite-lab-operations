@@ -45,7 +45,7 @@ export function login(demo,mode='signup') {
   const signup=mode==='signup', reset=mode==='reset', owner=mode==='demo-signin';
   return `<main class="public-site" id="main" tabindex="-1"><header class="public-nav"><a href="#main" aria-label="ELITE">${logo()}</a><button class="btn outline" data-action="authMode:signin">Masuk</button></header>
   <div class="public-body"><div class="public-grid"><section class="club-hero public-hero club-media"><div class="club-intro"><p class="club-kicker"><i></i> Robotik SMKN 2 Surabaya</p><h1>Electronic<br>Innovation<br><em>Center.</em></h1><p class="club-lede">Dari meja rakit sampai uji coba, ini ruang kegiatan anggota robotik SMKN 2 Surabaya.</p></div>
-  <div class="club-emblem" aria-hidden="true"><i class="orbit orbit-one"></i><i class="orbit orbit-two"></i><div class="club-core">${icon('zap',54)}</div></div></section>
+  </section>
   <section class="auth-panel" id="akun"><div class="auth-tabs">${['signup','signin'].map((m,i)=>'<button type="button" aria-pressed="'+(m===mode)+'" data-action="authMode:'+m+'">'+['Daftar','Masuk'][i]+'</button>').join('')}</div>
   <h2>${signup?'Buat akun anggota':reset?'Pulihkan akun':owner?'Masuk ke demo':'Masuk ke ELITE'}</h2><p>${signup?'Daftarkan akunmu. Admin ELITE akan mengaktifkan akses anggota.':reset?'Masukkan kode pemulihan yang kamu simpan saat mendaftar. Jika hilang, hubungi admin ELITE.':owner?'Gunakan kredensial demo pemilik. Perubahan anggota contoh tersimpan di browser ini.':'Gunakan username dan kata sandi yang sudah terdaftar.'}</p>
   <form id="account-form" data-mode="${mode}">${signup?'<label>Nama lengkap<input name="name" autocomplete="name" required minlength="2" maxlength="120"></label>':''}
@@ -61,7 +61,7 @@ const more=(label,slug)=>`<a class="ops-link" href="#/${slug}">${label} ${icon('
 
 export function home(o,admin) {
   return `<section class="club-hero club-media">${backgroundVideo}<div class="club-intro"><p class="club-kicker"><i></i> Robotik SMKN 2 Surabaya</p><h1>Electronic<br>Innovation <em>Center.</em></h1><p class="club-lede">Ruang anggota ELITE untuk mengikuti kegiatan, melihat jadwal piket, dan melihat dokumentasi anggota.</p><a class="btn primary" href="#/dashboard">${icon('layout-dashboard',17)} Buka dashboard</a></div>
-    <div class="club-emblem" aria-hidden="true"><i class="orbit orbit-one"></i><i class="orbit orbit-two"></i><i class="orbit orbit-three"></i><div class="club-core">${icon('zap',74)}</div></div>
+    
     <div class="club-dateline">${icon('calendar-days',16)} ${formatDate(o.today,true)}</div></section>
     <section class="home-section club-directory"><h2>Jelajahi portal</h2>${quickNav(admin)}</section>${programCards()}`;
 }
