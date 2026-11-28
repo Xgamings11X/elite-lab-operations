@@ -59,6 +59,18 @@ const reveals=new IntersectionObserver(entries=>{
   revealItems(visible);
   visible.forEach(item=>reveals.unobserve(item));
 },{threshold:0});
+function startBackgroundVideo(){
+  const film=root.querySelector('.club-film');
+  if(!film)return;
+  const hero=film.closest('.club-media');
+  const fallback=()=>hero.classList.add('film-fallback');
+  film.muted=true;
+  film.playsInline=true;
+  film.addEventListener('playing',()=>hero.classList.remove('film-fallback'));
+  film.addEventListener('error',fallback);
+  film.addEventListener('waiting',fallback);
+  film.play().catch(fallback);
+}
 function watchSections(){
   reveals.disconnect();
   const visible=[];
@@ -147,6 +159,7 @@ async function paint({replace=false,append=false,direction=null}={}) {
     if(replace||!$('#main',root)||!$('.layout',root)) root.innerHTML=shell(state.session.user,state.session.demo,page);
     if(direction) updateNavigation(page);
     $('#main').innerHTML=output;
+    startBackgroundVideo();
     if(direction){window.scrollTo(0,0);$('#main').focus({preventScroll:true});}
     if(replace || direction) watchSections();
     else reveals.disconnect();
@@ -314,6 +327,7 @@ function showRecovery(code,temporary=false){
 }
 function renderAccount(mode) {
   root.innerHTML=login(state.session.demo,mode);
+  startBackgroundVideo();
   watchSections();
 }
 root.addEventListener('submit',async event=>{
