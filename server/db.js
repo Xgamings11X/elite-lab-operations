@@ -4,7 +4,7 @@ import pg from 'pg';
 export async function database(url) {
   const client = url ? new pg.Pool({ connectionString: url }) : new (await import('@electric-sql/pglite')).PGlite();
   const schema = await readFile(process.cwd()+'/database/schema.sql', 'utf8');
-  if (url) await client.query(schema);
+  if (url) await client.query('SELECT pg_advisory_xact_lock(531047301);\n'+schema);
   else await client.exec(schema);
   return {
     query: client.query.bind(client),

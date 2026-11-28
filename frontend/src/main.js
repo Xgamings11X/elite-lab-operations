@@ -1,6 +1,6 @@
 import { api,compress } from './api.js';
 import { badge,btn,evidenceImages,evidenceViews,empty,formatDate,h,icon,roster,memberStudy } from './ui.js';
-import { adminPanel,attendance,attendanceTable,availablePages,dashboard,gallery,home,login,pages,picket,shell } from './views.js';
+import { adminPanel,attendance,attendanceTable,availablePages,dashboard,devicePanel,gallery,home,login,pages,picket,picketAttendance,shell } from './views.js';
 import { commandLinks,recentActivity,trendChart } from './operations-view.js';
 
 import {demoEvidence,saveDemoEvidence} from './demo-evidence.js';
@@ -83,17 +83,30 @@ async function paint({replace=false,append=false,direction=null}={}) {
     items=await api('/attendance?roster=true&date='+state.date);
     output=attendance(state,items,admin);
   }
-  if(page==='piket'||page==='dokumentasi'||(page==='admin'&&tab==='queue')) {
+  if(page==='piket'){
+    items=await api('/picket?day='+day);
+    output=picket(state,items,admin);
+  }
+  if(page==='absensipiket'){
+    if(!state.picketDate){
+      const d=new Date(overview.today+'T12:00:00Z');
+      if(weekdayNow===0||weekdayNow===6)d.setUTCDate(d.getUTCDate()-(weekdayNow===0?2:1));
+      state.picketDate=d.toISOString().slice(0,10);
+    }
+    const daily=await api('/picket-attendance?date='+state.picketDate);
+    items=daily.roster;photos=daily.photos;
+    if(state.session.user.owner_demo){
+      photos=(await demoEvidence(state.session.user.username)).filter(r=>r.date===state.picketDate);
+      if(photos.some(r=>r.present_ids))items=items.map(m=>({...m,status:photos.some(r=>r.present_ids?.includes(m.member_id))?'present':'absent',recorded_at:photos[0].created_at}));
+    }
+    output=picketAttendance(state.picketDate,items,photos,admin);
+  }
+  if(page==='dokumentasi'||(page==='admin'&&tab==='queue')) {
     const cursor=append&&state.photos.length?'&before='+state.photos.at(-1).id:'';
-    const [records,rosterItems]=await Promise.all([api(reportUrl(page)+cursor),page==='piket'?api('/picket?day='+day):null]);
-    photos=records;
+    photos=await api(reportUrl(page)+cursor);
     canLoadMore=photos.length===24;
     if(append) photos=[...state.photos,...photos];
-    if(page==='piket') {
-      items=rosterItems;
-      if(state.session.user.owner_demo&&!append) photos=[...await demoEvidence(state.session.user.email),...photos];
-      output=picket(state,items,photos,admin);
-    } else if(page==='dokumentasi') output=gallery(photos,admin);
+    if(page==='dokumentasi') output=gallery(photos,admin);
     else output=adminPanel(tab,photos,state.session.user);
   }
   if(page==='admin'&&tab!=='queue') {
@@ -168,17 +181,26 @@ function persist(path,method,makeBody) {
 async function openAction(action,value) {
   const item=state.items.find(x=>x.id===Number(value));
   if(action==='invite') {
-    showDialog('Aktifkan akun',field('Alamat email terdaftar','<input name="email" type="email" placeholder="anggota@gmail.com" required>')+
+    showDialog('Aktifkan akun',field('Username terdaftar','<input name="username" type="text" placeholder="anggota" required>')+
       field('Peran','<select name="role"><option value="viewer">Pelihat</option><option value="admin">Admin</option></select>')+
       '<p class="hint">Pastikan identitas pemilik akun sebelum memberikan akses.</p>',persist('/admin/users','POST',x=>x),'Aktifkan akses');
   }
-  if(action==='member') showDialog('Tambah anggota',field('Nama lengkap','<input name="full_name" required minlength="2" maxlength="120">')+
-    field('Kelas','<input name="class_name" required maxlength="50">')+field('Jurusan','<input name="division" required maxlength="80" placeholder="Contoh: Teknik Pemesinan">'),persist('/admin/members','POST',x=>x));
+  if(action==='member'||action==='editMember'){
+    const existing=action==='editMember'?item:null;
+    showDialog(existing?'Edit anggota':'Tambah anggota',
+      field('Nama lengkap','<input name="full_name" required maxlength="120" value="'+h(existing?.full_name)+'">')+
+      field('Username','<input name="username" '+(existing&&!existing.username?'':'required')+' maxlength="40" value="'+h(existing?.username)+'">')+
+      field(existing?'Kata sandi baru (opsional)':'Kata sandi','<input name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" '+(existing?'':'required')+'>')+
+      field('Kelas','<input name="class_name" required maxlength="50" value="'+h(existing?.class_name)+'">')+
+      field('Jurusan','<input name="division" required maxlength="80" value="'+h(existing?.division)+'">'),
+      persist('/admin/members'+(existing?'/'+existing.id:''),existing?'PATCH':'POST',values=>Object.fromEntries(Object.entries(values).filter(([,v])=>v!==''))));
+  }
+  if(action==='removeMember'&&item)showDialog('Hapus anggota','<p>Hapus '+h(item.full_name)+' dari daftar aktif dan cabut akses masuknya? Riwayat kehadiran tetap tersimpan.</p>',persist('/admin/members/'+item.id,'DELETE',()=>null),'Hapus anggota');
   if(action==='link'&&item) showDialog('Tautkan ID presensi',`<p>${h(item.full_name)}</p>`+
     field('Nomor registrasi','<input name="fingerprint_id" type="number" min="1" max="65535" value="'+(item.fingerprint_id??'')+'">')+
     '<p class="hint">Masukkan nomor registrasi anggota. Kosongkan untuk melepas tautan.</p>',
     persist('/admin/members/'+item.id+'/fingerprint','PATCH',x=>({fingerprint_id:x.fingerprint_id?Number(x.fingerprint_id):null})));
-  if(action==='revoke'&&item) showDialog('Cabut akses akun',`<p>Akhiri semua sesi dan cabut akses <strong>${h(item.email)}</strong>?</p>`,persist('/admin/users/'+item.id,'DELETE',()=>null),'Cabut akses');
+  if(action==='revoke'&&item) showDialog('Cabut akses akun',`<p>Akhiri semua sesi dan cabut akses <strong>${h(item.username)}</strong>?</p>`,persist('/admin/users/'+item.id,'DELETE',()=>null),'Cabut akses');
   if(action==='picket-remove'&&item) showDialog('Hapus jadwal petugas',`<p>Hapus <strong>${h(item.full_name)}</strong> dari jadwal hari ini?</p>`,persist('/picket/'+item.id,'DELETE',()=>null),'Hapus jadwal');
   if(action==='picket-add') {
     const members=await api('/admin/members'),day=state.day;
@@ -197,24 +219,23 @@ async function openAction(action,value) {
     syncTimes();
   }
   if(action==='upload' && value==='piket'){
-    const day=new Date(currentDate()+'T12:00:00Z');
-    day.setUTCDate(day.getUTCDate()-(day.getUTCDay()-state.day+7)%7);
     showDialog('Unggah bukti piket',
-      field('Tanggal piket','<input type="date" name="date" required value="'+day.toISOString().slice(0,10)+'">')+
-      field('Nama petugas dalam foto bersama','<textarea required name="participants" minlength="2" maxlength="500" placeholder="Pisahkan nama dengan koma"></textarea>')+
+      field('Tanggal piket','<input type="date" name="date" readonly value="'+state.picketDate+'">')+
+      '<fieldset><legend>Petugas yang hadir dalam foto</legend>'+state.items.map(m=>'<label><input type="checkbox" name="present" value="'+m.member_id+'"> '+h(m.full_name)+'</label>').join('')+'<small>Petugas yang belum hadir dicatat tidak hadir.</small></fieldset>'+
       evidenceViews.map(([key,label])=>field(label,'<input required type="file" accept="image/*" name="'+key+'">')).join('')+
-      '<p class="hint">Diunggah sebagai '+h(state.session.user.name||state.session.user.email)+(state.session.user.owner_demo?'. Bukti demo tersimpan di browser ini.':'.')+'</p>',
+      '<p class="hint">Diunggah sebagai '+h(state.session.user.name||state.session.user.username)+(state.session.user.owner_demo?'. Bukti demo tersimpan di browser ini.':'.')+'</p>',
       async(values,form)=>{
         if(![1,2,3,4,5].includes(new Date(values.date+'T12:00:00Z').getUTCDay())) throw Error('Pilih hari Senin sampai Jumat.');
-        if(values.participants.trim().length<2) throw Error('Isi nama petugas yang hadir.');
+        const ids=new FormData(form).getAll('present');
+        if(!ids.length)throw Error('Pilih petugas yang hadir.');
         const payload=new FormData();let size=0;
-        payload.set('date',values.date);payload.set('participants',values.participants.trim());
+        payload.set('date',values.date);payload.set('present_ids',ids.join(','));
         for(const [key] of evidenceViews){
           const image=await compress(form.elements[key].files[0]);size+=image.size;
           payload.set(key,image,'piket.webp');
         }
         if(size>4_000_000) throw Error('Total foto terlalu besar. Pilih foto berukuran lebih kecil.');
-        if(state.session.user.owner_demo) await saveDemoEvidence(state.session.user,payload);
+        if(state.session.user.owner_demo) await saveDemoEvidence(state.session.user,payload,state.items);
         else await api('/picket-reports','POST',payload);
       },'Kirim bukti');
     return;
@@ -244,7 +265,7 @@ async function openAction(action,value) {
   }
   if(action==='review') {
     const {report,attendance:matches,allAttendance,picket:planned}=await api('/admin/reports/'+Number(value)+'/context');
-    showDialog('Verifikasi foto',`<div class="review-grid"><section>${report.participants?evidenceImages(report)+'<p>Petugas: '+h(report.participants)+'</p>':'<img class="full-photo" src="'+h(report.photo_url)+'" alt="Foto laporan">'}<h3>${h(report.caption)}</h3><p>${formatDate(report.date,true)} · Diunggah oleh ${h(report.uploader_name||report.submitted_by_email)}</p>${badge(report.verification_status)}</section><section><h3>Absensi pembanding</h3>${attendanceTable(matches)}${allAttendance.length>matches.length?'<details><summary>Seluruh absensi tanggal ini</summary>'+attendanceTable(allAttendance)+'</details>':''}<h3>Petugas terjadwal</h3>${roster(planned)}</section></div>`+
+    showDialog('Verifikasi foto',`<div class="review-grid"><section>${report.participants?evidenceImages(report)+'<p>Petugas: '+h(report.participants)+'</p>':'<img class="full-photo" src="'+h(report.photo_url)+'" alt="Foto laporan">'}<h3>${h(report.caption)}</h3><p>${formatDate(report.date,true)} · Diunggah oleh ${h(report.uploader_name||report.submitted_by_username)}</p>${badge(report.verification_status)}</section><section><h3>${report.kind==='piket'?'Kehadiran piket':'Absensi pembanding'}</h3>${report.kind==='piket'?matches.map(m=>'<p>'+h(m.full_name)+' · '+badge(m.status)+'</p>').join('')||empty('Belum ada catatan piket.'):attendanceTable(matches)}${allAttendance.length>matches.length?'<details><summary>Seluruh absensi tanggal ini</summary>'+attendanceTable(allAttendance)+'</details>':''}<h3>Petugas terjadwal</h3>${roster(planned)}</section></div>`+
       field('Keputusan','<select name="status" required><option value="">Pilih keputusan</option><option value="approved">Disetujui</option><option value="rejected">Perlu revisi</option></select>')+
       field('Catatan verifikasi','<textarea name="note" maxlength="500" rows="2" placeholder="Wajib jika perlu revisi"></textarea>'),
       persist('/admin/reports/'+report.id,'PATCH',x=>x),'Simpan keputusan');
@@ -282,7 +303,7 @@ root.addEventListener('submit',async event=>{
     if(result.recovery) {
       renderAccount('signin');
       const next=$('#account-form');
-      next.elements.email.value=values.email;
+      next.elements.username.value=values.username;
       next.querySelector('.auth-message').textContent=signup?'Akun terdaftar. Masuk setelah admin mengaktifkan akses.':'Kata sandi sudah diganti. Silakan masuk kembali.';
       showRecovery(result.recovery);
 
@@ -337,7 +358,7 @@ document.addEventListener('click',async event=>{
     if(action==='recovery'){
       const person=state.items.find(p=>p.id===Number(value));
       if(!person)return;
-      showDialog('Pemulihan akun', '<p>Verifikasi identitas pemilik '+h(person.email)+' sebelum memberikan kode. Kode pengganti berlaku 15 menit.</p>'+btn('Buat kode','issueRecovery:'+value,'primary'));return;
+      showDialog('Pemulihan akun', '<p>Verifikasi identitas pemilik '+h(person.username)+' sebelum memberikan kode. Kode pengganti berlaku 15 menit.</p>'+btn('Buat kode','issueRecovery:'+value,'primary'));return;
     }
     if(action==='issueRecovery'){busy=true;const result=await api('/admin/users/'+Number(value)+'/recovery','POST',{});showRecovery(result.recovery,true);return;}
     busy=true;
@@ -356,6 +377,7 @@ document.addEventListener('click',async event=>{
       history.replaceState(null,'',location.pathname+'#/beranda');
       return await getSession();
     }
+    if(action==='picketDate'){state.picketDate=value;return await paint();}
     if(action==='day') {state.day=Number(value);return await paint();}
     if(action==='adminTab') {
       state.tab=value;
@@ -387,6 +409,12 @@ document.addEventListener('keydown',event=>{
   }
 });
 document.addEventListener('change',async event=>{
+  if(event.target.id==='picket-date'){
+    const date=event.target.value;
+    if(![1,2,3,4,5].includes(new Date(date+'T12:00:00Z').getUTCDay())){event.target.value=state.picketDate;notice('Pilih Senin sampai Jumat.',true);return;}
+    state.picketDate=date;
+    try{await paint();}catch(error){notice(error.message,true);}return;
+  }
   if(event.target.name==='status') {
     syncTimes();
     const note=$('#modal-form')?.elements.note;
@@ -433,6 +461,8 @@ setInterval(async()=>{
       const element=document.querySelector('[data-kpi="'+key+'"]');
       if(element && value!==undefined) element.textContent=value;
     }
+    const panel=$('#device-status');
+    if(panel&&isAdmin())panel.outerHTML=devicePanel(overview.device);
     const activity=$('#recent-activity');
     if(activity) {
       const insights=await api('/insights');

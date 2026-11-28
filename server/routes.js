@@ -3,11 +3,10 @@ import { join } from 'node:path';
 import multer from 'multer';
 import sharp from 'sharp';
 import { z } from 'zod';
-import { admin,fail,token,digest } from './auth.js';
+import { admin,fail,token,digest,passwordHash,usernameField } from './auth.js';
 import { first,rows,localDate,weekday } from './db.js';
 import { recordAdminChange } from './operations.js';
 
-const mail=z.string().trim().toLowerCase().pipe(z.email().max(254));
 const date=z.iso.date();
 const division=z.string().trim().min(1).max(80);
 const role=z.enum(['admin','viewer']);
@@ -17,10 +16,10 @@ const time=z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 const upload=multer({limits:{fileSize:5*1024*1024,fields:4,files:1,fieldSize:2048}});
 const memberFields=z.object({full_name:z.string().trim().min(2).max(120),class_name:z.string().trim().min(1).max(50),division});
 const attendanceQuery=`SELECT a.id,a.member_id,a.date::text,a.check_in_time,a.check_out_time,a.method,a.status,a.notes,
-  m.full_name,m.class_name,m.division FROM attendances a JOIN members m ON m.id=a.member_id WHERE a.date=$1 ORDER BY a.check_in_time NULLS LAST,m.full_name`;
+  m.full_name,m.class_name,m.division FROM attendances a JOIN members m ON m.id=a.member_id WHERE a.date=$1 ORDER BY lower(m.division),lower(m.class_name),lower(m.full_name),m.id`;
 const picketQuery=`SELECT p.id,m.id AS member_id,m.full_name,m.class_name,m.division FROM picket_schedules p
-  JOIN members m ON m.id=p.member_id WHERE p.day_of_week BETWEEN 1 AND 5 AND p.day_of_week=$1 AND m.is_active ORDER BY m.full_name`;
-const reportQuery=`SELECT id,kind,date::text,division,caption,verification_status,verification_note,verified_by_email,verified_at,submitted_by_email,uploader_name,participants,created_at,
+  JOIN members m ON m.id=p.member_id WHERE p.day_of_week BETWEEN 1 AND 5 AND p.day_of_week=$1 AND m.is_active ORDER BY lower(m.division),lower(m.class_name),lower(m.full_name),m.id`;
+const reportQuery=`SELECT id,kind,date::text,division,caption,verification_status,verification_note,verified_by_username,verified_at,submitted_by_username,uploader_name,participants,created_at,
   '/api/reports/' || id || '/photo' AS photo_url FROM reports`;
 
 async function encodePhoto(file){
@@ -40,21 +39,21 @@ export function registerRoutes(app,db,cfg) {
         (SELECT count(*)::int FROM attendances a JOIN members m ON m.id=a.member_id WHERE a.date=$1 AND a.status='present' AND m.is_active) AS present,
         (SELECT count(*)::int FROM reports WHERE verification_status='pending') AS pending,
         (SELECT count(*)::int FROM members WHERE is_active AND fingerprint_id IS NULL) AS unenrolled`,today),
-      first(db,`SELECT id,last_seen,(last_seen IS NOT NULL AND last_seen>now()-interval '90 seconds') AS online FROM devices WHERE id=$1`,cfg.device),
+      first(db,`SELECT id,last_seen,(SELECT count(*)::int FROM scan_events WHERE device_id=devices.id) AS scans,(SELECT max(created_at) FROM scan_events WHERE device_id=devices.id) AS last_scan,(SELECT response->>'status' FROM scan_events WHERE device_id=devices.id ORDER BY created_at DESC LIMIT 1) AS delivery_status,(last_seen IS NOT NULL AND last_seen>now()-interval '90 seconds') AS online FROM devices WHERE id=$1`,cfg.device),
       rows(db,picketQuery,weekday(today)),
       rows(db,reportQuery+' ORDER BY date DESC,id DESC LIMIT 3'),
     ]);
     if(req.user.role==='viewer') { delete summary.pending; delete summary.unenrolled; }
-    res.json({today,summary,device,picket,reports});
+    res.json({today,summary,device:req.user.role==='admin'?device:null,picket,reports});
   });
   app.get('/api/attendance',async(req,res)=>{
     const day=date.parse(req.query.date??localDate().date);
     if(req.query.roster!=='true'||weekday(day)!==6) return res.json(await rows(db,attendanceQuery,day));
     res.json(await rows(db,`SELECT a.id,m.id AS member_id,$1::date::text AS date,
-      a.check_in_time,a.check_out_time,a.notes,coalesce(a.status,'unmarked') AS status,
+      a.check_in_time,a.check_out_time,a.method,a.notes,coalesce(a.status,'unmarked') AS status,
       m.full_name,m.class_name,m.division FROM members m
       LEFT JOIN attendances a ON a.member_id=m.id AND a.date=$1
-      WHERE m.is_active OR a.id IS NOT NULL ORDER BY m.full_name`,day));
+      WHERE m.is_active OR a.id IS NOT NULL ORDER BY lower(m.division),lower(m.class_name),lower(m.full_name),m.id`,day));
   });
   app.put('/api/attendance',admin,async(req,res)=>{
     const item=z.object({member_id:id,date,status:z.enum(['present','absent','excused','competition']),check_in_time:time.nullable(),check_out_time:time.nullable(),notes:z.string().trim().max(400)}).parse(req.body);
@@ -65,7 +64,7 @@ export function registerRoutes(app,db,cfg) {
       if (!member) throw fail(404,'Anggota aktif tidak ditemukan.');
       const saved=await first(tx,`INSERT INTO attendances(member_id,date,status,check_in_time,check_out_time,notes,method)
         VALUES ($1,$2,$3,$4,$5,$6,'manual') ON CONFLICT (member_id,date) DO UPDATE SET status=excluded.status,
-        check_in_time=excluded.check_in_time,check_out_time=excluded.check_out_time,notes=excluded.notes,method='manual',last_scan_at=NULL RETURNING id`,
+        check_in_time=excluded.check_in_time,check_out_time=excluded.check_out_time,notes=excluded.notes,last_scan_at=NULL RETURNING id`,
         item.member_id,item.date,item.status,item.check_in_time,item.check_out_time,item.notes);
       await recordAdminChange(tx,req.user,'attendance_saved',saved.id,member.full_name+' · '+item.date+' · '+({present:'Hadir',absent:'Tidak hadir',excused:'Izin',competition:'Dispensasi'}[item.status]));
     });
@@ -101,18 +100,35 @@ export function registerRoutes(app,db,cfg) {
     res.set('Content-Type','image/webp');
     res.sendFile(path,{cacheControl:false},error=>{if(error) next(error);});
   });
+  app.get('/api/picket-attendance',async(req,res)=>{
+    const day=date.parse(req.query.date);
+    if(weekday(day)<1||weekday(day)>5)throw fail(400,'Pilih hari kerja.');
+    let roster=await rows(db,'SELECT * FROM picket_attendance WHERE date=$1 ORDER BY lower(division),lower(class_name),lower(full_name),member_id',day);
+    if(!roster.length) roster=await rows(db,picketQuery,weekday(day));
+    const photos=await rows(db,reportQuery+" WHERE kind='piket' AND date=$1 ORDER BY id DESC",day);
+    res.json({roster,photos});
+  });
   const evidence=multer({limits:{files:3,fileSize:4_000_000,fields:2,fieldSize:2048}});
   app.post('/api/picket-reports',evidence.fields(['before','after','group'].map(name=>({name,maxCount:1}))),async(req,res)=>{
     const day=date.parse(req.body.date);
-    const participants=z.string().trim().min(2).max(500).parse(req.body.participants);
+    const present=z.array(id).min(1).max(300).parse(String(req.body.present_ids??'').split(','));
     if(![1,2,3,4,5].includes(weekday(day))) throw fail(400,'Piket berlangsung Senin sampai Jumat.');
     const files=['before','after','group'].map(name=>req.files?.[name]?.[0]);
     if(files.some(file=>!file)) throw fail(400,'Lengkapi ketiga foto piket.');
     const [before,after,group]=await Promise.all(files.map(encodePhoto));
-    const snapshot=await rows(db,picketQuery,weekday(day));
-    const result=await first(db,`INSERT INTO reports(kind,date,caption,photo_key,submitted_by_email,uploader_name,
-      participants,picket_snapshot,before_photo,after_photo,photo_data) VALUES ('piket',$1,'Bukti piket',$2,$3,$4,$5,$6::jsonb,$7,$8,$9) RETURNING id`,
-      day,randomUUID()+'.webp',req.user.email,req.user.name,participants,JSON.stringify(snapshot),before,after,group);
+    const result=await db.transaction(async tx=>{
+      const captured=await rows(tx,'SELECT * FROM picket_attendance WHERE date=$1 ORDER BY lower(division),lower(class_name),lower(full_name),member_id',day);
+      const snapshot=captured.length?captured:await rows(tx,picketQuery,weekday(day));
+      if(present.some(id=>!snapshot.some(m=>m.member_id===id)))throw fail(400,'Pilih petugas terjadwal.');
+      const participants=snapshot.filter(m=>present.includes(m.member_id)).map(m=>m.full_name).join(', ');
+      const report=await first(tx,`INSERT INTO reports(kind,date,caption,photo_key,submitted_by_username,uploader_name,
+        participants,picket_snapshot,before_photo,after_photo,photo_data) VALUES ('piket',$1,'Bukti piket',$2,$3,$4,$5,$6::jsonb,$7,$8,$9) RETURNING id`,
+        day,randomUUID()+'.webp',req.user.username,req.user.name,participants,JSON.stringify(snapshot),before,after,group);
+      for(const m of snapshot){
+        await rows(tx,`INSERT INTO picket_attendance(date,member_id,full_name,class_name,division,status,report_id) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(date,member_id) DO UPDATE SET status=excluded.status,report_id=excluded.report_id,recorded_at=now() WHERE picket_attendance.status='absent' AND excluded.status='present'`,day,m.member_id,m.full_name,m.class_name,m.division,present.includes(m.member_id)?'present':'absent',report.id);
+      }
+      return report;
+    });
     res.status(201).json(result);
   });
   app.post('/api/reports',admin,upload.single('photo'),async(req,res)=>{
@@ -123,15 +139,15 @@ export function registerRoutes(app,db,cfg) {
     const key=randomUUID()+'.webp';
     const result=await db.transaction(async tx=>{
         const snapshot=item.kind==='piket'?JSON.stringify(await rows(tx,picketQuery,weekday(item.date))):null;
-        return first(tx,`INSERT INTO reports(kind,date,division,caption,photo_key,submitted_by_email,picket_snapshot,photo_data)
-          VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8) RETURNING id`,item.kind,item.date,item.division??null,item.caption,key,req.user.email,snapshot,output);
+        return first(tx,`INSERT INTO reports(kind,date,division,caption,photo_key,submitted_by_username,picket_snapshot,photo_data)
+          VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8) RETURNING id`,item.kind,item.date,item.division??null,item.caption,key,req.user.username,snapshot,output);
       });
     res.status(201).json(result);
   });
   app.get('/api/admin/reports/:id/context',admin,async(req,res)=>{
     const report=await first(db,reportQuery+' WHERE id=$1',id.parse(req.params.id));
     if(!report) throw fail(404,'Laporan tidak ditemukan.');
-    const [attendance,snapshot]=await Promise.all([rows(db,attendanceQuery,report.date),first(db,'SELECT picket_snapshot FROM reports WHERE id=$1',report.id)]);
+    const [attendance,snapshot]=await Promise.all([report.kind==='piket'?rows(db,'SELECT full_name,class_name,division,member_id,status FROM picket_attendance WHERE date=$1 ORDER BY lower(division),lower(class_name),lower(full_name),member_id',report.date):rows(db,attendanceQuery,report.date),first(db,'SELECT picket_snapshot FROM reports WHERE id=$1',report.id)]);
     const picket=snapshot?.picket_snapshot??await rows(db,picketQuery,weekday(report.date));
     const planned = new Set(picket.map(item=>item.member_id));
     const comparison=report.kind==='piket'?attendance.filter(item=>planned.has(item.member_id)):attendance.filter(item=>item.division===report.division);
@@ -142,17 +158,52 @@ export function registerRoutes(app,db,cfg) {
     if(item.status==='rejected' && !item.note) throw fail(400,'Isi catatan revisi.');
     const reportId=id.parse(req.params.id);
     await db.transaction(async tx=>{
-      const result=await first(tx,`UPDATE reports SET verification_status=$2,verification_note=$3,verified_by_email=$4,verified_at=now()
-        WHERE id=$1 AND verification_status='pending' RETURNING caption`,reportId,item.status,item.note,req.user.email);
+      const result=await first(tx,`UPDATE reports SET verification_status=$2,verification_note=$3,verified_by_username=$4,verified_at=now()
+        WHERE id=$1 AND verification_status='pending' RETURNING caption`,reportId,item.status,item.note,req.user.username);
       if(!result) throw fail(409,'Laporan sudah diperiksa atau tidak ditemukan.');
       await recordAdminChange(tx,req.user,item.status==='approved'?'report_approved':'report_revision',reportId,result.caption);
     });
     res.json({id:reportId});
   });
-  app.get('/api/admin/members',admin,async(req,res)=>res.json(await rows(db,'SELECT * FROM members ORDER BY full_name')));
+  app.get('/api/admin/members',admin,async(req,res)=>res.json(await rows(db,'SELECT m.*,u.username FROM members m LEFT JOIN users u ON u.id=m.user_id WHERE m.is_active ORDER BY lower(m.division),lower(m.class_name),lower(m.full_name),m.id')));
   app.post('/api/admin/members',admin,async(req,res)=>{
-    const item=memberFields.parse(req.body);
-    res.status(201).json(await first(db,'INSERT INTO members(full_name,class_name,division) VALUES($1,$2,$3) RETURNING id',item.full_name,item.class_name,item.division));
+    const item=memberFields.extend({username:usernameField,password:z.string().min(8).max(128)}).parse(req.body);
+    if(item.username===cfg.demoUsername||item.username===cfg.adminUsername) throw fail(409,'Username sudah digunakan.');
+    const hash=await passwordHash(item.password);
+    res.status(201).json(await db.transaction(async tx=>{
+      const user=await first(tx,"INSERT INTO users(username,name,password_hash,role) VALUES($1,$2,$3,'viewer') RETURNING id",item.username,item.full_name,hash);
+      return first(tx,'INSERT INTO members(full_name,class_name,division,user_id) VALUES($1,$2,$3,$4) RETURNING id',item.full_name,item.class_name,item.division,user.id);
+    }));
+  });
+  app.patch('/api/admin/members/:id',admin,async(req,res)=>{
+    const item=memberFields.extend({username:usernameField.optional(),password:z.string().min(8).max(128).optional()}).parse(req.body);
+    if(item.username===cfg.demoUsername) throw fail(409,'Username sudah digunakan.');
+    const hash=item.password?await passwordHash(item.password):null;
+    await db.transaction(async tx=>{
+      const member=await first(tx,'UPDATE members SET full_name=$2,class_name=$3,division=$4 WHERE id=$1 AND is_active RETURNING user_id',id.parse(req.params.id),item.full_name,item.class_name,item.division);
+      if(!member) throw fail(404,'Anggota tidak ditemukan.');
+      if(member.user_id){
+        await rows(tx,'UPDATE users SET name=$2,username=coalesce($3,username),password_hash=coalesce($4,password_hash) WHERE id=$1',member.user_id,item.full_name,item.username??null,hash);
+        if(hash)await rows(tx,'DELETE FROM sessions WHERE user_id=$1',member.user_id);
+      }else if(item.username && hash){
+        const user=await first(tx,"INSERT INTO users(username,name,password_hash,role) VALUES($1,$2,$3,'viewer') RETURNING id",item.username,item.full_name,hash);
+        await rows(tx,'UPDATE members SET user_id=$2 WHERE id=$1',id.parse(req.params.id),user.id);
+      }else if(item.username||hash)throw fail(400,'Isi username dan kata sandi untuk membuat akun.');
+    });
+    res.sendStatus(204);
+  });
+  app.delete('/api/admin/members/:id',admin,async(req,res)=>{
+    await db.transaction(async tx=>{
+      const member=await first(tx,'UPDATE members SET is_active=false,fingerprint_device=NULL,fingerprint_id=NULL WHERE id=$1 AND is_active RETURNING user_id',id.parse(req.params.id));
+      if(!member)throw fail(404,'Anggota tidak ditemukan.');
+      if(member.user_id){
+        const account=await first(tx,'SELECT role FROM users WHERE id=$1 FOR UPDATE',member.user_id);
+        if(account.role==='admin')throw fail(409,'Ubah peran admin sebelum menghapus anggota.');
+        await rows(tx,'UPDATE users SET is_active=false WHERE id=$1',member.user_id);
+        await rows(tx,'DELETE FROM sessions WHERE user_id=$1',member.user_id);
+      }
+    });
+    res.sendStatus(204);
   });
   app.patch('/api/admin/members/:id/fingerprint',admin,async(req,res)=>{
     const item=z.object({fingerprint_id:z.number().int().min(1).max(65535).nullable()}).parse(req.body);
@@ -170,13 +221,14 @@ export function registerRoutes(app,db,cfg) {
     if(!target) throw fail(403,'Pemulihan akun ini tidak tersedia.');
     res.json({recovery});
   });
-  app.get('/api/admin/users',admin,async(req,res)=>res.json(await rows(db,'SELECT id,email,name,role,is_active,(password_hash IS NOT NULL) AS signed_in FROM users WHERE NOT owner_demo ORDER BY is_active DESC,email')));
+  app.get('/api/admin/users',admin,async(req,res)=>res.json(await rows(db,'SELECT id,username,name,role,is_active,(password_hash IS NOT NULL) AS signed_in FROM users WHERE NOT owner_demo ORDER BY is_active DESC,username')));
   app.post('/api/admin/users',admin,async(req,res)=>{
-    const item=z.object({email:mail,role}).parse(req.body);
+    const item=z.object({username:usernameField,role}).parse(req.body);
     const result=await db.transaction(async tx=>{
-      const saved=await first(tx,`UPDATE users SET is_active=true,role=$2,invited_by=$3 WHERE email=$1 AND NOT is_active AND password_hash IS NOT NULL RETURNING id`,item.email,item.role,req.user.id);
+      const saved=await first(tx,`UPDATE users SET is_active=true,role=$2,invited_by=$3 WHERE username=$1 AND NOT is_active AND password_hash IS NOT NULL RETURNING id`,item.username,item.role,req.user.id);
       if(!saved) throw fail(409,'Pilih akun terdaftar yang belum aktif.');
-      await recordAdminChange(tx,req.user,'access_granted',saved.id,item.email+' · '+(item.role==='admin'?'Admin':'Pelihat'));
+      await rows(tx,'UPDATE members SET is_active=true WHERE user_id=$1',saved.id);
+      await recordAdminChange(tx,req.user,'access_granted',saved.id,item.username+' · '+(item.role==='admin'?'Admin':'Pelihat'));
       return saved;
     });
     res.status(201).json(result);
@@ -187,10 +239,10 @@ export function registerRoutes(app,db,cfg) {
     await db.transaction(async tx=>{
       const admins=await rows(tx,"SELECT id FROM users WHERE is_active AND role='admin' ORDER BY id FOR UPDATE");
       if(!admins.some(user=>user.id===req.user.id)) throw fail(403,'Akses admin sudah dicabut.');
-      const changed=await first(tx,'UPDATE users SET is_active=false WHERE id=$1 AND is_active RETURNING email',target);
+      const changed=await first(tx,'UPDATE users SET is_active=false WHERE id=$1 AND is_active RETURNING username',target);
       if(!changed) return;
       await rows(tx,'DELETE FROM sessions WHERE user_id=$1',target);
-      await recordAdminChange(tx,req.user,'access_revoked',target,changed.email);
+      await recordAdminChange(tx,req.user,'access_revoked',target,changed.username);
     });
     res.sendStatus(204);
   });

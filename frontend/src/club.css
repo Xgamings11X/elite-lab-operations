@@ -212,3 +212,12 @@ td small {white-space:normal}
  .panel .tabs button{min-height:42px;flex:1 0 auto}
  .report-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,265px),1fr))}
 }
+
+.club-hero.club-media{position:relative;isolation:isolate;overflow:hidden;background:#182237 url('/elite-bersama.webp') center center/cover no-repeat}
+.club-media .club-film,.club-hero.club-media::before{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.club-media .club-film{z-index:-2;object-fit:cover}
+.club-hero.club-media::before{content:"";z-index:-1;background:linear-gradient(95deg,rgba(12,18,37,.9),rgba(12,18,37,.62) 55%,rgba(12,18,37,.32))}
+.club-media .club-intro,.club-media .club-dateline{color:white}
+#modal-form fieldset{border:1px solid #d6d3cc;border-radius:12px;padding:12px}
+#modal-form fieldset label{display:flex;align-items:center;gap:8px;padding:6px}
+#modal-form input[type=checkbox]{width:18px;height:18px;min-height:0}

@@ -23,10 +23,10 @@ export async function createApp(env=process.env,demo=false,fixturePasswords={}) 
   if (demo && (host!=='127.0.0.1'||!loopback)) throw Error('Demo hanya untuk loopback.');
   const connectionString=env.DATABASE_URL?.trim() || env.POSTGRES_URL?.trim();
   if (!demo && !connectionString) throw Object.assign(new Error('Database anggota belum terhubung.'),{code:'MEMBER_DB_MISSING'});
-  const adminEmail=env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+  const adminUsername=env.BOOTSTRAP_ADMIN_USERNAME?.trim().toLowerCase();
   const adminPassword=env.BOOTSTRAP_ADMIN_PASSWORD;
-  const setupAdmin=adminEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail) && adminPassword?.length>=8 && adminPassword.length<=128;
-  const cfg={demo,adminEmail,demoEmail:env.OWNER_DEMO_EMAIL?.trim().toLowerCase(),url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C3-LAB-01',
+  const setupAdmin=adminUsername && /^[a-z0-9][a-z0-9._-]{2,39}$/.test(adminUsername) && adminPassword?.length>=8 && adminPassword.length<=128;
+  const cfg={demo,adminUsername,demoUsername:env.OWNER_DEMO_PASSWORD?(env.OWNER_DEMO_USERNAME||'demo').trim().toLowerCase():null,url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C3-LAB-01',
     deviceToken:demo?'demo-local-device-token':(env.DEVICE_TOKEN?.length>=32?env.DEVICE_TOKEN:null),
     storage: demo?await mkdtemp(join(tmpdir(),'elite-demo-')):resolve(env.STORAGE_DIR||join(root,'storage')),root};
   const storageFromDist=relative(join(root,'dist'),cfg.storage);
@@ -40,12 +40,12 @@ export async function createApp(env=process.env,demo=false,fixturePasswords={}) 
     for(const role of ['admin','viewer']) if(fixturePasswords[role]) await rows(db,'UPDATE users SET password_hash=$2 WHERE id=$1',accounts[role],await passwordHash(fixturePasswords[role]));
   }
   else if (setupAdmin) {
-    const email=adminEmail;
-    const existing=(await rows(db,'SELECT password_hash FROM users WHERE email=$1',email))[0];
-    if(!existing?.password_hash) await rows(db,`INSERT INTO users(email,role,password_hash) VALUES ($1,'admin',$2)
-      ON CONFLICT(email) DO UPDATE SET password_hash=excluded.password_hash WHERE users.role='admin' AND users.password_hash IS NULL`,
-      email,await passwordHash(env.BOOTSTRAP_ADMIN_PASSWORD));
-    if(env.BOOTSTRAP_ADMIN_RECOVERY_CODE?.length>=32 && env.BOOTSTRAP_ADMIN_RECOVERY_CODE.length<=100) await rows(db,"UPDATE users SET recovery_hash=$2 WHERE email=$1 AND role='admin' AND recovery_hash IS NULL",email,digest(env.BOOTSTRAP_ADMIN_RECOVERY_CODE));
+    const username=adminUsername;
+    const existing=(await rows(db,'SELECT password_hash FROM users WHERE username=$1',username))[0];
+    if(!existing?.password_hash) await rows(db,`INSERT INTO users(username,role,password_hash) VALUES ($1,'admin',$2)
+      ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash WHERE users.role='admin' AND users.password_hash IS NULL`,
+      username,await passwordHash(env.BOOTSTRAP_ADMIN_PASSWORD));
+    if(env.BOOTSTRAP_ADMIN_RECOVERY_CODE?.length>=32 && env.BOOTSTRAP_ADMIN_RECOVERY_CODE.length<=100) await rows(db,"UPDATE users SET recovery_hash=$2 WHERE username=$1 AND role='admin' AND recovery_hash IS NULL",username,digest(env.BOOTSTRAP_ADMIN_RECOVERY_CODE));
   }
   const app=express();
   app.disable('x-powered-by');

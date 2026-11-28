@@ -25,14 +25,18 @@ export function iot(app,db,cfg) {
         return stored.response;
       }
       const member=await first(tx,'SELECT id,full_name FROM members WHERE is_active AND fingerprint_device=$1 AND fingerprint_id=$2 FOR UPDATE',cfg.device,scan.fingerprint_id);
-      if (!member) return {status:'unknown',message:'ID sidik jari belum ditautkan.'};
+      if (!member){
+        const result={status:'unknown',message:'ID sidik jari belum ditautkan.'};
+        await rows(tx,'INSERT INTO scan_events(device_id,event_id,fingerprint_id,response) VALUES($1,$2,$3,$4)',cfg.device,scan.event_id,scan.fingerprint_id,JSON.stringify(result));
+        return result;
+      }
       const { date,time,now }=localDate();
       if(weekday(date)!==6) throw fail(400,'Absensi ekskul hanya dibuka hari Sabtu WIB.');
       const attendance=await first(tx,'SELECT status,check_in_time,check_out_time,last_scan_at FROM attendances WHERE member_id=$1 AND date=$2 FOR UPDATE',member.id,date);
       let type='IN';
       if (!attendance) {
-        await rows(tx,`INSERT INTO attendances(member_id,date,check_in_time,status,method,last_scan_at)
-          VALUES ($1,$2,$3,'present','esp32_c3_fingerprint',$4)`,member.id,date,time,now.toISOString());
+        await rows(tx,`INSERT INTO attendances(member_id,date,check_in_time,status,method,last_scan_at,device_id)
+          VALUES ($1,$2,$3,'present','esp32_c3_fingerprint',$4,$5)`,member.id,date,time,now.toISOString(),cfg.device);
       } else if (attendance.status!=='present' || attendance.check_out_time) type='UNCHANGED';
       else if (attendance.last_scan_at && now-new Date(attendance.last_scan_at)<90000) type='DUPLICATE';
       else if (!attendance.check_in_time) {

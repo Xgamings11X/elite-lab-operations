@@ -16,7 +16,8 @@ const symbols={
 };
 export const modules=[
   ['absensi','Absensi Anggota','Lihat presensi dan jam masuk','fingerprint','coral'],
-  ['piket','Jadwal Piket','Lihat petugas dan bukti piket','calendar-days','mint'],
+  ['piket','Jadwal Piket','Lihat pembagian petugas','calendar-days','mint'],
+  ['absensipiket','Absensi Piket','Catat kehadiran dan bukti kegiatan','clipboard-check','honey'],
   ['dokumentasi','Dokumentasi Foto','Lihat arsip kegiatan ELITE','camera','plum'],
   ['dashboard','Dashboard','Ringkasan dan aktivitas anggota','layout-dashboard','blue'],
 ];
@@ -61,7 +62,7 @@ export function recentActivity(items,audit=false) {
   return `<ul class="activity-list">${items.map(item=>{
     const [glyph,label,theme]=symbols[item.action];
     const time=eventDate.format(new Date(item.happened_at||item.created_at));
-    return `<li>${tile(glyph,theme,17)}<span><strong>${h(item.title||item.detail)}</strong><small>${label}${audit?' · '+h(item.actor_email):''}</small></span><time datetime="${h(item.happened_at||item.created_at)}">${time}</time></li>`;
+    return `<li>${tile(glyph,theme,17)}<span><strong>${h(item.title||item.detail)}</strong><small>${label}${audit?' · '+h(item.actor_username):''}</small></span><time datetime="${h(item.happened_at||item.created_at)}">${time}</time></li>`;
   }).join('')}</ul>`;
 }
 export function reviewQueue(items) {

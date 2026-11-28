@@ -7,7 +7,7 @@ import { createApp } from '../server/gateway.js';
 
 test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C3',async t=>{
   t.mock.timers.enable({apis:['Date'],now:new Date('2026-11-28T03:00:00Z')});
-  const instance=await createApp({OWNER_DEMO_EMAIL:'demo@example.test',OWNER_DEMO_PASSWORD:'demo-only-pass'},true,{admin:'local-admin-test',viewer:'local-viewer-test'});
+  const instance=await createApp({OWNER_DEMO_USERNAME:'demo',OWNER_DEMO_PASSWORD:'demo-only-pass'},true,{admin:'local-admin-test',viewer:'local-viewer-test'});
   const server=instance.app.listen(0,'127.0.0.1');
   await once(server,'listening');
   t.after(async()=>{
@@ -24,7 +24,7 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C3',async t=>{
     const result=response.headers.get('content-type')?.includes('json')?await response.json():await response.arrayBuffer();
     return {status:response.status,result,sessionDays:response.headers.getSetCookie().some(value=>value.startsWith('elite_session=') && value.includes('Max-Age=172800')),cookie:response.headers.getSetCookie().find(value=>value.startsWith('elite_session=')&&!value.startsWith('elite_session=;'))?.split(';')[0]};
   }
-  const login=(role)=>call('/auth/signin',{method:'POST',body:{email:role+'@gmail.com',password:'local-'+role+'-test'}});
+  const login=(role)=>call('/auth/signin',{method:'POST',body:{username:role,password:'local-'+role+'-test'}});
   assert.equal((await call('/overview')).status,401);
   assert.equal((await call('/auth/demo',{method:'POST',body:{role:'admin'},headers:{Origin:'https://example.org'}})).status,403);
   const adminLogin=await login('admin');
@@ -52,19 +52,29 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C3',async t=>{
   const png=await sharp({create:{width:24,height:24,channels:3,background:'#FF3E3E'}}).png().toBuffer();
   const evidence=new FormData();
   evidence.set('date','2026-11-27');
-  evidence.set('participants','Rani, Dimas');
+  const scheduled=(await call('/picket?day=5',{cookie:viewer})).result;
+  evidence.set('present_ids',String(scheduled[0].member_id));
   for(const key of ['before','after','group']) evidence.set(key,new Blob([png],{type:'image/png'}),key+'.png');
   const submission=await call('/picket-reports',{method:'POST',cookie:viewer,body:evidence});
   assert.equal(submission.status,201);
   const record=(await call('/admin/reports/'+submission.result.id+'/context',{cookie:admin})).result.report;
-  assert.equal(record.participants,'Rani, Dimas');
-  assert.equal(record.submitted_by_email,'viewer@gmail.com');
+  assert.equal(record.participants,scheduled[0].full_name);
+  assert.equal(record.submitted_by_username,'viewer');
   for(const key of ['before','after','group']){
     const image=await call('/reports/'+record.id+'/photo?view='+key,{cookie:viewer});
     assert.equal(Buffer.from(image.result).subarray(8,12).toString(),'WEBP');
   }
+  const daily=(await call('/picket-attendance?date=2026-11-27',{cookie:viewer})).result;
+  assert.ok(daily.roster.find(m=>m.member_id===scheduled[0].member_id && m.status==='present' && m.recorded_at));
+  assert.ok(daily.roster.some(m=>m.status==='absent'));
+  assert.equal((await call('/picket-attendance?date=2026-11-28',{cookie:viewer})).status,400);
+  assert.equal((await call('/picket-attendance?date=2026-11-26',{cookie:viewer})).result.photos.length,0);
   evidence.delete('group');
   assert.equal((await call('/picket-reports',{method:'POST',cookie:viewer,body:evidence})).status,400);
+  const manual=await call('/attendance',{method:'PUT',cookie:admin,body:{member_id:scheduled[0].member_id,date:today,status:'excused',check_in_time:null,check_out_time:null,notes:'Verifikasi sumber'}});
+  assert.equal(manual.status,200);
+  const fresh=await call('/attendance?date='+today,{cookie:viewer});
+  assert.ok(fresh.result.find(m=>m.member_id===scheduled[0].member_id));
   const photo=new FormData();
   photo.set('kind','piket');
   photo.set('date','2026-11-27');
@@ -86,10 +96,21 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C3',async t=>{
   assert.equal((await review('approved','')).status,409);
   assert.equal((await call('/reports?kind=piket',{cookie:viewer})).result[0].verification_status,'rejected');
 
-  const member=await call('/admin/members',{method:'POST',cookie:admin,body:{full_name:'Anggota Uji',class_name:'XI TEI',division:'Elektronik'}});
+  const member=await call('/admin/members',{method:'POST',cookie:admin,body:{username:'anggota.uji',password:'anggota-pass',full_name:'Anggota Uji',class_name:'XI TEI',division:'Elektronik'}});
   assert.equal(member.status,201);
   const memberId=member.result.id;
   assert.equal((await call('/admin/members/'+memberId+'/fingerprint',{method:'PATCH',cookie:admin,body:{fingerprint_id:99}})).status,200);
+  const newManual={member_id:memberId,date:'2026-11-21',status:'excused',check_in_time:null,check_out_time:null,notes:''};
+  assert.equal((await call('/attendance',{method:'PUT',cookie:admin,body:newManual})).status,200);
+  const previousSaturday=(await call('/attendance?date=2026-11-21',{cookie:viewer})).result;
+  assert.equal(previousSaturday.find(m=>m.member_id===memberId).method,'manual');
+  const fields={full_name:'Anggota Uji Baru',class_name:'XI A',division:'Elektronik',username:'anggota.uji'};
+  assert.equal((await call('/admin/members/'+memberId,{method:'PATCH',cookie:admin,body:fields})).status,204);
+  const members=(await call('/admin/members',{cookie:admin})).result;
+  const keys=members.map(m=>[m.division,m.class_name,m.full_name].join('/'));
+  assert.deepEqual(keys,[...keys].sort());
+  const used=members.find(m=>m.fingerprint_id && m.id!==memberId);
+  assert.equal((await call('/admin/members/'+memberId+'/fingerprint',{method:'PATCH',cookie:admin,body:{fingerprint_id:used.fingerprint_id}})).status,409);
   const eventId=randomUUID();
   const scan=(options={})=>call('/iot/fingerprint-attendance',{method:'POST',body:{device_id:'ESP32-C3-LAB-01',fingerprint_id:99,event_id:eventId,...options.body},headers:options.headers??{'X-Device-Token':'demo-local-device-token'}});
   assert.equal((await scan({headers:{}})).status,401);
@@ -111,25 +132,30 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C3',async t=>{
   assert.equal((await call('/attendance',{method:'PUT',cookie:admin,body:correction})).status,200);
   const updated=(await call('/attendance?date='+today,{cookie:viewer})).result.find(row=>row.member_id===memberId);
   assert.equal(updated.status,'absent');
+  assert.equal(updated.method,'esp32_c3_fingerprint');
   assert.equal(updated.check_in_time,null);
   assert.equal(updated.check_out_time,null);
   assert.equal((await scan({body:{event_id:randomUUID()}})).result.type,'UNCHANGED');
-  const account={email:'undangan.uji@gmail.com',password:'abcdefgh',name:'Anggota Uji'};
+  const memberLogin=await call('/auth/signin',{method:'POST',body:{username:'anggota.uji',password:'anggota-pass'}});
+  assert.ok(memberLogin.cookie);
+  assert.equal((await call('/admin/members/'+memberId,{method:'DELETE',cookie:admin})).status,204);
+  assert.equal((await call('/overview',{cookie:memberLogin.cookie})).status,401);
+  const account={class_name:'XI',division:'TEI',username:'undangan.uji',password:'abcdefgh',name:'Anggota Uji'};
   const registered=await call('/auth/signup',{method:'POST',body:account});
   assert.equal(registered.status,201);
   assert.equal((await call('/auth/signin',{method:'POST',body:account})).status,403);
-  const invited=await call('/admin/users',{method:'POST',cookie:admin,body:{email:'undangan.uji@gmail.com',role:'viewer'}});
+  const invited=await call('/admin/users',{method:'POST',cookie:admin,body:{username:'undangan.uji',role:'viewer'}});
   assert.equal(invited.status,201);
   const beforeReset=await call('/auth/signin',{method:'POST',body:account});
   assert.ok(beforeReset.cookie);
-  const reset={email:account.email,password:'new-pass',code:registered.result.recovery};
+  const reset={username:account.username,password:'new-pass',code:registered.result.recovery};
   assert.equal((await call('/auth/reset',{method:'POST',body:{...reset,password:'1234567'}})).status,400);
   assert.ok((await call('/auth/reset',{method:'POST',body:reset})).result.recovery);
   assert.equal((await call('/overview',{cookie:beforeReset.cookie})).status,401);
   assert.equal((await call('/auth/reset',{method:'POST',body:reset})).status,400);
   assert.equal((await call('/auth/signin',{method:'POST',body:account})).status,401);
   assert.equal((await call('/auth/signin',{method:'POST',body:reset})).status,200);
-  const demoLogin=await call('/auth/signin',{method:'POST',body:{email:'demo@example.test',password:'demo-only-pass'}});
+  const demoLogin=await call('/auth/signin',{method:'POST',body:{username:'demo',password:'demo-only-pass'}});
   assert.ok(demoLogin.cookie);
   assert.ok(demoLogin.sessionDays);
   assert.equal((await call('/overview',{cookie:demoLogin.cookie})).result.summary.members,1);
@@ -139,7 +165,7 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C3',async t=>{
   const demoAdmin=(await switchDemo('admin',demoLogin.cookie)).cookie;
   assert.equal((await call('/session',{cookie:demoAdmin})).result.user.role,'admin');
   const sampleUsers=await call('/admin/users',{cookie:demoAdmin});
-  assert.equal(sampleUsers.result[0].email,'anggota@example.test');
+  assert.equal(sampleUsers.result[0].username,'anggota');
   assert.equal((await call('/admin/users',{method:'POST',cookie:demoAdmin,body:{}})).status,403);
   const demoViewer=(await switchDemo('viewer',demoAdmin)).cookie;
   assert.equal((await call('/admin/users',{cookie:demoViewer})).status,403);
@@ -148,11 +174,11 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C3',async t=>{
 
   assert.equal((await call('/admin/users/'+invited.result.id,{method:'DELETE',cookie:admin})).status,204);
   const users=await call('/admin/users',{cookie:admin});
-  const viewerId=users.result.find(user=>user.email==='viewer@gmail.com').id;
+  const viewerId=users.result.find(user=>user.username==='viewer').id;
   assert.equal((await call('/admin/users/'+viewerId,{method:'DELETE',cookie:admin})).status,204);
   assert.equal((await call('/overview',{cookie:viewer})).status,401);
   const audit=await call('/admin/audit',{cookie:admin});
   assert.equal(audit.status,200);
-  assert.deepEqual(audit.result.map(event=>event.action),['access_revoked','access_revoked','access_granted','attendance_saved','attendance_saved','fingerprint_linked','report_revision']);
-  assert.ok(audit.result.every(event=>event.actor_email==='admin@gmail.com'));
+  assert.deepEqual(audit.result.map(event=>event.action),['access_revoked','access_revoked','access_granted','attendance_saved','attendance_saved','attendance_saved','fingerprint_linked','report_revision','attendance_saved']);
+  assert.ok(audit.result.every(event=>event.actor_username==='admin'));
 });

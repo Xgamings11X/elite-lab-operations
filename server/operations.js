@@ -33,7 +33,7 @@ export function registerOperations(app,db) {
     res.json({trend,activity});
   });
   app.get('/api/admin/audit',admin,async(req,res)=>{
-    res.json(await rows(db,`SELECT c.id,c.action,c.entity_id,c.detail,c.created_at,u.email AS actor_email
+    res.json(await rows(db,`SELECT c.id,c.action,c.entity_id,c.detail,c.created_at,u.username AS actor_username
       FROM admin_changes c JOIN users u ON u.id=c.actor_id
       ORDER BY c.id DESC LIMIT 30`));
   });

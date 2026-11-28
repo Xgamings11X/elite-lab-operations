@@ -1,7 +1,25 @@
+DO $accounts$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='users' AND column_name='email') THEN
+    ALTER TABLE users RENAME COLUMN email TO username;
+    ALTER TABLE reports RENAME COLUMN submitted_by_email TO submitted_by_username;
+    ALTER TABLE reports RENAME COLUMN verified_by_email TO verified_by_username;
+    CREATE TEMP TABLE migrated_logins ON COMMIT DROP AS
+      SELECT id,username AS old_login,
+        CASE WHEN split_part(username,'@',1) ~ '^[a-z0-9][a-z0-9._-]{2,39}$'
+          AND count(*) OVER (PARTITION BY split_part(username,'@',1))=1
+          AND split_part(username,'@',1) !~ '^anggota-[0-9]+$'
+        THEN split_part(username,'@',1) ELSE 'anggota-'||id END AS login FROM users;
+    UPDATE reports r SET submitted_by_username=m.login FROM migrated_logins m WHERE r.submitted_by_username=m.old_login;
+    UPDATE reports r SET verified_by_username=m.login FROM migrated_logins m WHERE r.verified_by_username=m.old_login;
+    UPDATE users u SET username=m.login FROM migrated_logins m WHERE u.id=m.id;
+  END IF;
+END $accounts$;
+DROP TABLE IF EXISTS oauth_attempts;
 CREATE TABLE IF NOT EXISTS users (
   id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  email text NOT NULL UNIQUE CHECK (email = lower(email)),
-  name text, avatar_url text, google_sub text UNIQUE,
+  username text NOT NULL UNIQUE CHECK (username = lower(username)),
+  name text, avatar_url text,
   role text NOT NULL CHECK (role IN ('admin','viewer')),
   is_active boolean NOT NULL DEFAULT true,
   invited_by integer REFERENCES users(id),
@@ -17,11 +35,6 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at timestamptz NOT NULL
 );
 CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
-CREATE TABLE IF NOT EXISTS oauth_attempts (
-  state_hash text PRIMARY KEY, verifier text NOT NULL, nonce text NOT NULL,
-  expires_at timestamptz NOT NULL
-);
-CREATE INDEX IF NOT EXISTS oauth_expiry ON oauth_attempts(expires_at);
 CREATE TABLE IF NOT EXISTS devices (
   id text PRIMARY KEY, last_seen timestamptz
 );
@@ -75,9 +88,9 @@ CREATE TABLE IF NOT EXISTS reports (
   photo_key text NOT NULL UNIQUE,
   demo_asset boolean NOT NULL DEFAULT false,
   verification_status text NOT NULL DEFAULT 'pending' CHECK (verification_status IN ('pending','approved','rejected')),
-  verified_by_email text, verified_at timestamptz,
+  verified_by_username text, verified_at timestamptz,
   verification_note text NOT NULL DEFAULT '',
-  submitted_by_email text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+  submitted_by_username text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
   CHECK (kind <> 'dokumentasi' OR division IS NOT NULL),
   CHECK (verification_status <> 'rejected' OR length(trim(verification_note)) > 0)
 );
@@ -107,3 +120,18 @@ BEGIN
   END IF;
 END $migration$;
 CREATE INDEX IF NOT EXISTS reports_created_at ON reports(created_at DESC);
+
+ALTER TABLE users DROP COLUMN IF EXISTS google_sub;
+ALTER TABLE members ADD COLUMN IF NOT EXISTS user_id integer UNIQUE REFERENCES users(id);
+
+CREATE TABLE IF NOT EXISTS picket_attendance (
+  date date NOT NULL CHECK (extract(isodow FROM date) BETWEEN 1 AND 5),
+  member_id integer NOT NULL REFERENCES members(id),
+  full_name text NOT NULL, class_name text NOT NULL, division text NOT NULL,
+  status text NOT NULL CHECK(status IN ('present','absent')),
+  recorded_at timestamptz NOT NULL DEFAULT now(),
+  report_id integer NOT NULL REFERENCES reports(id),
+  PRIMARY KEY(date,member_id)
+);
+
+ALTER TABLE attendances ADD COLUMN IF NOT EXISTS device_id text REFERENCES devices(id);

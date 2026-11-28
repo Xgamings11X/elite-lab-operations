@@ -1,8 +1,8 @@
 import { first,rows,localDate,weekday } from './db.js';
 
 export async function seedDemo(db,device) {
-  const admin = await first(db,"INSERT INTO users(email,name,role) VALUES ('admin@gmail.com','Admin ELITE','admin') RETURNING id");
-  const viewer = await first(db,"INSERT INTO users(email,name,role) VALUES ('viewer@gmail.com','Pelihat ELITE','viewer') RETURNING id");
+  const admin = await first(db,"INSERT INTO users(username,name,role) VALUES ('admin','Admin ELITE','admin') RETURNING id");
+  const viewer = await first(db,"INSERT INTO users(username,name,role) VALUES ('viewer','Pelihat ELITE','viewer') RETURNING id");
   const names = ['Aditya Pratama','Nabila Rahma','Rizky Ramadhan','Siti Aulia','Fajar Maulana','Dewi Anggraini','Bagas Saputra','Rafi Hidayat','Intan Permata','Alvin Setiawan','Keisha Putri','Dimas Nugroho','Citra Amelia','Farhan Rayhan','Aisyah Khairani','Naufal Akbar','Gita Safitri','Reza Firmansyah','Kevin Putra','Alika Salsabila','Bayu Ramadan','Arya Mahendra','Lulu Maharani','Daffa Rizaldi'];
   const divisions = ['Rekayasa Perangkat Lunak','Teknik Elektronika Industri','Teknik Pemesinan'];
   const classes = ['XI RPL 1','XI TEI 2','X TPM 1','XI RPL 2','X TEI 1','XI TPM 1'];
@@ -24,8 +24,8 @@ export async function seedDemo(db,device) {
       SELECT id,$1::date-$2::integer,'manual','excused' FROM members ORDER BY id OFFSET $3 LIMIT $4`,today,offset,count,offset%3+1);
   }
   await rows(db,'UPDATE devices SET last_seen=now() + interval \'1 day\' WHERE id=$1',device);
-  await rows(db,`INSERT INTO reports (kind,date,division,caption,photo_key,demo_asset,verification_status,submitted_by_email) VALUES
-    ('dokumentasi',$1,'Teknik Pemesinan','Perakitan prototipe rover di meja kerja','demo-rover',true,'pending','admin@gmail.com'),
-    ('piket',$1,null,'Pengecekan dan penataan meja kerja','demo-workbench',true,'approved','admin@gmail.com')`,today);
+  await rows(db,`INSERT INTO reports (kind,date,division,caption,photo_key,demo_asset,verification_status,submitted_by_username) VALUES
+    ('dokumentasi',$1,'Teknik Pemesinan','Perakitan prototipe rover di meja kerja','demo-rover',true,'pending','admin'),
+    ('piket',$1,null,'Pengecekan dan penataan meja kerja','demo-workbench',true,'approved','admin')`,today);
   return { admin:admin.id,viewer:viewer.id };
 }

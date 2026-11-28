@@ -55,7 +55,9 @@ int post(const char* path, const String& json, bool reportResult = false) {
       if (body.indexOf("\"OUT\"") >= 0) Serial.println("Absen pulang tercatat.");
       else if (body.indexOf("\"IN\"") >= 0) Serial.println("Absen masuk tercatat.");
       else Serial.println("Scan diterima; tidak ada perubahan presensi.");
-    } else Serial.printf("Presensi HTTP %d\n", status);
+    } else if (status == 404) Serial.println("Slot belum ditautkan ke anggota aktif.");
+    else if (status == 401) Serial.println("Token perangkat ditolak.");
+    else Serial.printf("Presensi HTTP %d\n", status);
   }
   http.end();
   return status;
@@ -129,7 +131,7 @@ void loop() {
   }
   if (!pendingBody.isEmpty() && deadline(nextAttempt)) {
     const int status = post("/api/iot/fingerprint-attendance", pendingBody, true);
-    if ((status >= 200 && status < 300) || (status >= 400 && status < 500 && status != 429)) pendingBody = "";
+    if ((status >= 200 && status < 300) || (status >= 400 && status < 500 && status != 408 && status != 425 && status != 429)) pendingBody = "";
     nextAttempt = millis() + 2500;
   }
   if (sensorReady && deadline(nextHeartbeat)) {
