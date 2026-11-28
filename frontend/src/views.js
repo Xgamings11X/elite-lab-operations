@@ -40,7 +40,7 @@ const programs=[
 function programCards(){
   return '<section class="field-guide" id="kegiatan"><h2>Kegiatan ELITE</h2><div class="guide-grid">'+programs.map(([glyph,title,copy])=>'<article>'+icon(glyph,24)+'<h3>'+title+'</h3><p>'+copy+'</p></article>').join('')+'</div></section><section class="week-board"><h2>Pekan di ELITE</h2><div class="week-grid">'+[...days,'Sabtu'].map((d,i)=>'<div><strong>'+d+'</strong><small>'+(i===5?'Absensi ekskul':'Piket')+'</small></div>').join('')+'</div></section>';
 }
-const backgroundVideo='<video class="club-film" autoplay muted loop playsinline preload="metadata" poster="/elite-bersama.webp" aria-hidden="true" tabindex="-1"><source src="/kegiatan.mp4" type="video/mp4" media="(prefers-reduced-motion: no-preference)"></video>';
+const backgroundVideo='<video class="club-film" autoplay muted loop playsinline preload="metadata" poster="/elite-bersama.webp" aria-hidden="true" tabindex="-1"><source src="/kegiatan.mp4" type="video/mp4"></video>';
 export function login(demo,mode='signup') {
   const signup=mode==='signup', reset=mode==='reset', owner=mode==='demo-signin';
   return `<main class="public-site" id="main" tabindex="-1"><header class="public-nav"><a href="#main" aria-label="ELITE">${logo()}</a><button class="btn outline" data-action="authMode:signin">Masuk</button></header>
