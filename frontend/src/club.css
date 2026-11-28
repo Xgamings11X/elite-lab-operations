@@ -165,3 +165,17 @@ html[data-motion="calm"] :is(.club-core,.page-head,.auth-panel){animation:quiet-
 @keyframes elite-orbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.orbit-one,.orbit-two{animation:none}html[data-motion="calm"] .club-emblem .club-core{animation:emblem-glow 3.6s ease-in-out infinite alternate}.loading-tiles i{animation-name:emblem-glow}}
 @keyframes emblem-glow{from{opacity:.65}to{opacity:1}}
+
+#transition .screen-grid{position:absolute;inset:0;width:100%;height:100%;background:#131b2b}
+.screen-grid g{fill:#bd7033;opacity:.1}
+.boot-grid .screen-grid g,.route-loading .screen-grid g{animation:screen-wave 1.08s ease-in-out infinite}
+@keyframes screen-wave{0%,100%{opacity:.08}48%{opacity:.64}75%{opacity:.19}}
+.loading-plaque{position:relative;padding:18px 30px;background:#101727ed;border:1px solid #ca956b;border-radius:10px}
+@media(prefers-reduced-motion:reduce){
+ .boot-grid .screen-grid g,.route-loading .screen-grid g{animation-duration:2.4s}
+ html[data-motion="calm"] .club-emblem .orbit-one{animation:quiet-orbit 15s linear infinite}
+ html[data-motion="calm"] .club-emblem .orbit-two{animation:quiet-orbit 21s linear reverse infinite}
+ html[data-motion="calm"] .club-emblem .club-core{animation:quiet-tilt 2.6s ease-in-out infinite alternate}
+}
+@keyframes quiet-orbit{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes quiet-tilt{from{transform:rotate(-9deg)}to{transform:rotate(1deg)}}

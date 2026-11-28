@@ -22,7 +22,7 @@ export async function createApp(env=process.env,demo=false,fixturePasswords={}) 
   if (url.protocol!=='https:' && !(url.protocol==='http:' && loopback)) throw Error('APP_URL harus HTTPS di luar loopback.');
   if (demo && (host!=='127.0.0.1'||!loopback)) throw Error('Demo hanya untuk loopback.');
   if (!demo && (!env.DATABASE_URL || !env.BOOTSTRAP_ADMIN_EMAIL?.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) || (env.BOOTSTRAP_ADMIN_PASSWORD?.length??0)<8 || env.BOOTSTRAP_ADMIN_PASSWORD.length>128)) throw Error('Lengkapi DATABASE_URL, email dan kata sandi admin (8–128 karakter).');
-  const cfg={demo,demoEmail:env.OWNER_DEMO_EMAIL?.trim().toLowerCase(),demoPassword:env.OWNER_DEMO_PASSWORD?.length>=8 && env.OWNER_DEMO_PASSWORD.length<=128?env.OWNER_DEMO_PASSWORD:null,url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C1-LAB-01',
+  const cfg={demo,demoEmail:env.OWNER_DEMO_EMAIL?.trim().toLowerCase(),url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C1-LAB-01',
     deviceToken:demo?'demo-local-device-token':(env.DEVICE_TOKEN?.length>=32?env.DEVICE_TOKEN:null),
     storage: demo?await mkdtemp(join(tmpdir(),'elite-demo-')):resolve(env.STORAGE_DIR||join(root,'storage')),root};
   const storageFromDist=relative(join(root,'dist'),cfg.storage);
@@ -62,20 +62,7 @@ export async function createApp(env=process.env,demo=false,fixturePasswords={}) 
   iot(app,db,cfg);
   const signedIn=authentication(app,db,cfg);
   app.use('/api',signedIn);
-  app.use('/api',(req,res,next)=>{
-    if(!req.user.owner_demo) return next();
-    if(!cfg.demoPassword || req.user.email!==cfg.demoEmail) return res.sendStatus(403);
-    const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
-    const member={id:1,member_id:1,full_name:'Anggota Contoh',class_name:'XI',division:'Teknik Elektronika'};
-    const day=new Date(today+'T12:00:00Z').getUTCDay();
-    const sample={
-      '/overview':{today,summary:{members:1,present:day===6?1:0},picket:day>=1&&day<=5?[member]:[],reports:[]},
-      '/attendance':new Date(String(req.query.date)+'T12:00:00Z').getUTCDay()===6?[{...member,status:'present',check_in_time:'08:00',check_out_time:null}]:[],
-      '/picket':[member],'/reports':[],'/insights':{trend:[{date:today,present:day===6?1:0,excused:0}],activity:[]}
-    };
-    if(req.method==='GET' && Object.hasOwn(sample,req.path)) return res.json(sample[req.path]);
-    res.status(403).json({error:'Akun demo hanya dapat melihat data contoh.'});
-  });
+  app.use('/api',(req,res,next)=>req.user.owner_demo?res.status(401).json({error:'Silakan masuk kembali.'}):next());
   registerRoutes(app,db,cfg);
   registerOperations(app,db);
   app.use('/api',(req,res)=>res.status(404).json({error:'Endpoint tidak ditemukan.'}));

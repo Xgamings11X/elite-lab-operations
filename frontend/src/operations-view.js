@@ -17,8 +17,8 @@ const symbols={
 export const modules=[
   ['absensi','Absensi Anggota','Lihat presensi dan jam masuk','fingerprint','coral'],
   ['piket','Jadwal Piket','Lihat petugas dan bukti piket','calendar-days','mint'],
-  ['dokumentasi','Dokumentasi Foto','Lihat arsip kegiatan lab','camera','plum'],
-  ['dashboard','Dashboard','Ringkasan dan aktivitas lab','layout-dashboard','blue'],
+  ['dokumentasi','Dokumentasi Foto','Lihat arsip kegiatan ELITE','camera','plum'],
+  ['dashboard','Dashboard','Ringkasan dan aktivitas anggota','layout-dashboard','blue'],
 ];
 const tile=(glyph,theme,size=22)=>`<span class="ops-icon ${theme}">${icon(glyph,size)}</span>`;
 
@@ -73,8 +73,8 @@ export function reviewQueue(items) {
 export function operationsBoard(data,insights,period) {
   return `<div class="ops-board">
     <section class="ops-panel"><div class="ops-panel-head"><div><h2>Tren Kehadiran</h2><p>Rekap absensi per hari</p></div>${tile('chart-no-axes-column','neutral',19)}</div><div id="attendance-trend">${trendChart(insights.trend,period)}</div></section>
-    <section class="ops-panel"><div class="ops-panel-head"><div><h2>Aktivitas Terbaru</h2><p>Presensi dan laporan lab</p></div>${tile('activity','neutral',19)}</div><div id="recent-activity">${recentActivity(insights.activity)}</div></section>
-    <section class="ops-panel ops-roster"><div class="ops-panel-head"><div><h2>Petugas Piket Hari Ini</h2><p>Jadwal lab robotik</p></div>${detailLink('Lihat jadwal','piket')}</div><div id="today-roster">${roster(data.picket)}</div></section>
+    <section class="ops-panel"><div class="ops-panel-head"><div><h2>Aktivitas Terbaru</h2><p>Presensi dan laporan kegiatan</p></div>${tile('activity','neutral',19)}</div><div id="recent-activity">${recentActivity(insights.activity)}</div></section>
+    <section class="ops-panel ops-roster"><div class="ops-panel-head"><div><h2>Petugas Piket Hari Ini</h2><p>Jadwal piket anggota</p></div>${detailLink('Lihat jadwal','piket')}</div><div id="today-roster">${roster(data.picket)}</div></section>
   </div>`;
 }
 export function commandLinks(pages) {

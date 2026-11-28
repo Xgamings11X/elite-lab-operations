@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import sharp from 'sharp';
-import { createApp } from '../server/index.js';
+import { createApp } from '../server/gateway.js';
 
 test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
   t.mock.timers.enable({apis:['Date'],now:new Date('2026-11-28T03:00:00Z')});

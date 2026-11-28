@@ -26,6 +26,6 @@ export async function seedDemo(db,device) {
   await rows(db,'UPDATE devices SET last_seen=now() + interval \'1 day\' WHERE id=$1',device);
   await rows(db,`INSERT INTO reports (kind,date,division,caption,photo_key,demo_asset,verification_status,submitted_by_email) VALUES
     ('dokumentasi',$1,'Teknik Pemesinan','Perakitan prototipe rover di meja kerja','demo-rover',true,'pending','admin@gmail.com'),
-    ('piket',$1,null,'Pengecekan dan penataan meja kerja lab','demo-workbench',true,'approved','admin@gmail.com')`,today);
+    ('piket',$1,null,'Pengecekan dan penataan meja kerja','demo-workbench',true,'approved','admin@gmail.com')`,today);
   return { admin:admin.id,viewer:viewer.id };
 }

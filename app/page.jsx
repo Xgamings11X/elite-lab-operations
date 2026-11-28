@@ -1,3 +1,18 @@
-import { login } from '../frontend/src/views.js';
+import {login} from '../frontend/src/views.js';
 import Portal from './portal';
-export default function Page(){return <><a className="skip" href="#main">Lewati ke konten</a><div id="app" dangerouslySetInnerHTML={{__html:login(false)}}/><div id="transition" aria-hidden="true" className="boot-grid"><div className="loading-plaque"><span className="loading-tiles">{Array.from({length:9},(_,i)=><i key={i} style={{animationDelay:(i%3)*90+Math.floor(i/3)*75+"ms"}}/>)}</span><strong>LOADING</strong><small className="route-label">Membuka ELITE</small></div></div><div id="toast" role="status" aria-live="polite"/><dialog id="dialog"/><Portal/></>}
+
+function LoadingGrid(){
+  return <div id="transition" className="boot-grid" aria-hidden="true">
+    <svg className="screen-grid" viewBox="0 0 12 12" preserveAspectRatio="xMidYMid slice" focusable="false">
+      {Array.from({length:12},(_,phase)=><g key={phase} style={{animationDelay:(phase-12)*90+'ms'}}>
+        {Array.from({length:12},(_,y)=><rect key={y} x={(phase-y+12)%12} y={y} width=".995" height=".995"/>)}
+      </g>)}
+    </svg>
+    <div className="loading-plaque"><strong>LOADING</strong><small className="route-label">Membuka ELITE</small></div>
+  </div>;
+}
+export default function Page(){
+  return <><a className="skip" href="#main">Lewati ke konten</a>
+    <div id="app" dangerouslySetInnerHTML={{__html:login(false)}}/><LoadingGrid/>
+    <div id="toast" role="status" aria-live="polite"/><dialog id="dialog"/><Portal/></>;
+}

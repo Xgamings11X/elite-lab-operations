@@ -1,0 +1,63 @@
+import express from 'express';
+import {rateLimit} from 'express-rate-limit';
+import {createHmac, createHash, randomBytes, timingSafeEqual, scryptSync} from 'node:crypto';
+
+const hash=value=>createHash('sha256').update(value).digest();
+const equal=(a,b)=>timingSafeEqual(hash(a),hash(b));
+export async function createApp(env=process.env,demo=false,fixtures={}){
+  const app=express();
+  app.disable('x-powered-by');
+  app.set('trust proxy',Number(env.TRUST_PROXY_HOPS||0));
+  const origin=new URL(env.APP_URL || (env.VERCEL_PROJECT_PRODUCTION_URL?'https://'+env.VERCEL_PROJECT_PRODUCTION_URL:demo?'http://localhost:4173':'http://localhost:3000')).origin;
+  const options={httpOnly:true,secure:origin.startsWith('https:'),sameSite:'lax',path:'/'};
+  const email=env.OWNER_DEMO_EMAIL?.trim().toLowerCase(), password=env.OWNER_DEMO_PASSWORD;
+  const key=email && password?.length>=8 && password.length<=128?scryptSync(password,'elite-demo:'+email,32):null;
+  const sign=value=>createHmac('sha256',key).update(value).digest('base64url');
+  let backend;
+  app.use('/api',(req,res,next)=>{res.set('Cache-Control','no-store');next()});
+  app.post('/api/auth/signin',express.json({limit:'32kb'}),(req,res,next)=>{
+    if(!email || typeof req.body?.email!=='string' || req.body.email.trim().toLowerCase()!==email)return next('route');
+    if(req.get('origin')!==origin)return res.status(403).json({error:'Asal permintaan tidak diizinkan.'});
+    next();
+  },rateLimit({windowMs:60000,limit:20,message:{error:'Coba kembali sebentar.'}}),(req,res)=>{
+    if(!key || typeof req.body.password!=='string' || !equal(req.body.password,password))return res.status(401).json({error:'Email atau kata sandi salah.'});
+    const value='demo.'+(Date.now()+3600000)+'.'+randomBytes(16).toString('hex');
+    res.cookie('elite_session',value+'.'+sign(value),{...options,maxAge:3600000}).json({ok:true});
+  });
+  app.use('/api',(req,res,next)=>{
+    const session=req.headers.cookie?.match(/(?:^|; *)elite_session=([^;]+)/)?.[1];
+    const guest={user:null,demo};
+    if(!session?.startsWith('demo.')){
+      if(!session && req.method==='GET' && req.path==='/session') return res.json(guest);
+      return next();
+    }
+    const [,exp,nonce,mac]=session.split('.');
+    if(!key || Number(exp)<=Date.now() || !/^\d{13}$/.test(exp) || !mac || !equal(mac,sign(['demo',exp,nonce].join('.')))){
+      res.clearCookie('elite_session',options);
+      return req.path==='/session'?res.json(guest):res.status(401).json({error:'Silakan masuk kembali.'});
+    }
+    if(req.method==='POST' && req.path==='/auth/logout' && req.get('origin')===origin)return res.clearCookie('elite_session',options).sendStatus(204);
+    if(req.method==='GET' && req.path==='/session')return res.json({demo:false,user:{email,name:'Demo ELITE',id:0,role:'viewer',owner_demo:true}});
+    const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
+    const member={id:1,member_id:1,full_name:'Anggota Contoh',class_name:'XI',division:'Teknik Elektronika'};
+    const day=new Date(today+'T12:00:00Z').getUTCDay();
+    const sample={
+      '/overview':{today,summary:{members:1,present:day===6?1:0},picket:day>=1&&day<=5?[member]:[],reports:[]},
+      '/attendance':new Date(String(req.query.date)+'T12:00:00Z').getUTCDay()===6?[{...member,status:'present',check_in_time:'08:00',check_out_time:null}]:[],
+      '/picket':[member],'/reports':[],'/insights':{trend:[{date:today,present:day===6?1:0,excused:0}],activity:[]}
+    };
+
+    if(req.method==='GET' && Object.hasOwn(sample,req.path))return res.json(sample[req.path]);
+    return res.status(403).json({error:'Akun demo hanya dapat melihat data contoh.'});
+  });
+  app.use(async(req,res)=>{
+    try{
+      backend??=import('./index.js').then(m=>m.createApp(env,demo,fixtures)).catch(e=>{backend=undefined;throw e});
+      return (await backend).app(req,res);
+    }catch(error){
+      console.error('ELITE member service',error.code||error.name);
+      res.status(503).json({error:'Layanan anggota sementara belum tersedia. Silakan coba lagi nanti.'});
+    }
+  });
+  return {app,close:async()=>{if(backend)await (await backend).close()}};
+}

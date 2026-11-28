@@ -7,7 +7,7 @@ export default async function handler(req,res){
     return res.status(200).json({user:null,demo});
   }
   try {
-    instance ??= import('../../server/index.js').then(({createApp})=>createApp(process.env,demo)).catch(error=>{instance=undefined;throw error});
+    instance ??= import('../../server/gateway.js').then(({createApp})=>createApp(process.env,demo)).catch(error=>{instance=undefined;throw error});
     const {app}=await instance;
     return app(req,res);
   } catch(error) {

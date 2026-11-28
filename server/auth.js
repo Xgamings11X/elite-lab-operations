@@ -65,14 +65,6 @@ export function authentication(app,db,cfg) {
   });
   app.post('/api/auth/signin',async(req,res)=>{
     const {email,password}=credentials.parse(req.body);
-    if(email===cfg.demoEmail && cfg.demoPassword){
-      if(!timingSafeEqual(Buffer.from(digest(password)),Buffer.from(digest(cfg.demoPassword)))) throw fail(401,'Email atau kata sandi salah.');
-      const demoUser=await first(db,`INSERT INTO users(email,name,role,owner_demo) VALUES($1,'Demo ELITE','viewer',true)
-        ON CONFLICT(email) DO UPDATE SET role='viewer' WHERE users.owner_demo AND users.is_active RETURNING id`,email);
-      if(!demoUser) throw fail(403,'Alamat demo tidak tersedia.');
-      await openSession(req,res,demoUser.id);
-      return res.json({ok:true});
-    }
     const user=await first(db,'SELECT id,is_active,password_hash FROM users WHERE email=$1 AND NOT owner_demo',email);
     const [salt,expected]=(user?.password_hash || 'unknown:'+ '0'.repeat(128)).split(':');
     const actual=await derive(password,salt,64);
