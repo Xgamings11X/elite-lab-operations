@@ -194,3 +194,21 @@ td small {white-space:normal}
   .topbar .demo-label{display:none}
   .topbar .search-trigger{min-width:38px;min-height:38px}
 }
+
+.evidence-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.4rem;padding:.75rem}
+.evidence-strip figure{min-width:0;margin:0}
+.evidence-strip a{display:block;border-radius:.6rem;overflow:hidden}
+.evidence-strip img{display:block;width:100%;aspect-ratio:1;object-fit:cover}
+.evidence-strip figcaption{margin-top:.3rem;font-size:.78rem;font-weight:650}
+.report-body{overflow-wrap:anywhere}
+@media(max-width:760px){
+ .topbar{padding-inline:clamp(8px,2.5vw,16px);gap:6px}
+ .top-right{gap:5px;min-width:0}
+ .topbar .demo-switch{min-height:40px;padding:0 9px;font-size:12px;white-space:nowrap}
+ .topbar .demo-switch svg{display:none}
+ #dialog{max-width:calc(100vw - 20px);max-height:90dvh}
+ #dialog input[type=file]{width:100%;min-width:0}
+ .panel .tabs{display:flex;flex-wrap:wrap;gap:4px}
+ .panel .tabs button{min-height:42px;flex:1 0 auto}
+ .report-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,265px),1fr))}
+}

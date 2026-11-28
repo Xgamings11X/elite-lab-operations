@@ -20,7 +20,14 @@ export function roster(items) {
   if(!items.length) return empty('Belum ada petugas terjadwal.');
   return '<ul class="roster">'+items.map(x=>'<li><span class="avatar">'+h(initials(x.full_name))+'</span><span><strong>'+h(x.full_name)+'</strong><small>'+h(memberStudy(x))+'</small></span></li>').join('')+'</ul>';
 }
+export const evidenceViews=[['before','Sebelum'],['after','Sesudah'],['group','Foto bersama']];
+export function evidenceImages(r){
+  return '<div class="evidence-strip">'+evidenceViews.map(([key,label])=>{
+    const url=r.demoImages?.[key]||r.photo_url+'?view='+key;
+    return '<figure><a href="'+h(url)+'" data-evidence><img loading="lazy" src="'+h(url)+'" alt="'+label+'"></a><figcaption>'+label+'</figcaption></figure>';
+  }).join('')+'</div>';
+}
 export function reports(items,isAdmin=false) {
   if(!items.length) return empty('Belum ada laporan foto.');
-  return '<div class="report-grid">'+items.map(r=>'<article class="report"><button class="report-image" type="button" data-action="photo:'+r.id+'" aria-label="Buka foto '+h(r.caption)+'"><img src="'+h(r.photo_url)+'" loading="lazy" width="480" height="260" alt="'+h(r.caption)+'"></button><div class="report-body"><div class="report-meta"><span>'+h(r.kind==='piket'?'Piket':r.division)+'</span><span>'+formatDate(r.date)+'</span></div><h3>'+h(r.caption)+'</h3><small>'+h(r.submitted_by_email)+'</small><div class="report-status">'+badge(r.verification_status)+(isAdmin&&r.verification_status==='pending'?btn('Periksa','review:'+r.id,'outline','shield-check'):'')+'</div>'+(r.verification_note?'<p class="note">'+h(r.verification_note)+'</p>':'')+'</div></article>').join('')+'</div>';
+  return '<div class="report-grid">'+items.map(r=>'<article class="report">'+(r.participants?evidenceImages(r):'<button class="report-image" type="button" data-action="photo:'+r.id+'" aria-label="Buka foto '+h(r.caption)+'"><img src="'+h(r.photo_url)+'" loading="lazy" width="480" height="260" alt="'+h(r.caption)+'"></button>')+'<div class="report-body"><div class="report-meta"><span>'+h(r.kind==='piket'?'Piket':r.division)+'</span><span>'+formatDate(r.date)+'</span></div><h3>'+h(r.caption)+'</h3>'+(r.participants?'<p>Petugas: '+h(r.participants)+'</p>':'')+'<small>Diunggah oleh '+h(r.uploader_name||r.submitted_by_email)+'</small><div class="report-status">'+badge(r.verification_status)+(isAdmin&&!r.demoImages&&r.verification_status==='pending'?btn('Periksa','review:'+r.id,'outline','shield-check'):'')+'</div>'+(r.verification_note?'<p class="note">'+h(r.verification_note)+'</p>':'')+'</div></article>').join('')+'</div>';
 }

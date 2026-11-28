@@ -7,8 +7,12 @@
 #include <time.h>
 #include "secrets.h"
 
+#if !defined(CONFIG_IDF_TARGET_ESP32C3)
+#error "Pilih board ESP32-C3 sebelum kompilasi."
+#endif
+
 static_assert(SENSOR_RX_PIN >= 0 && SENSOR_TX_PIN >= 0 && SENSOR_RX_PIN != SENSOR_TX_PIN,
-              "Isi pin UART ESP32-C1 di secrets.h sesuai papan fisik.");
+              "Isi pin UART ESP32-C3 di secrets.h sesuai papan fisik.");
 HardwareSerial sensorUart(1);
 Adafruit_Fingerprint sensor(&sensorUart);
 String pendingBody;

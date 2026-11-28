@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import sharp from 'sharp';
 import { createApp } from '../server/gateway.js';
 
-test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
+test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C3',async t=>{
   t.mock.timers.enable({apis:['Date'],now:new Date('2026-11-28T03:00:00Z')});
   const instance=await createApp({OWNER_DEMO_EMAIL:'demo@example.test',OWNER_DEMO_PASSWORD:'demo-only-pass'},true,{admin:'local-admin-test',viewer:'local-viewer-test'});
   const server=instance.app.listen(0,'127.0.0.1');
@@ -50,6 +50,21 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
   const friday=await call('/attendance',{cookie:admin,method:'PUT',body:{member_id:1,date:'2026-11-27',status:'absent',notes:'',check_in_time:null,check_out_time:null}});
   assert.equal(friday.status,400);
   const png=await sharp({create:{width:24,height:24,channels:3,background:'#FF3E3E'}}).png().toBuffer();
+  const evidence=new FormData();
+  evidence.set('date','2026-11-27');
+  evidence.set('participants','Rani, Dimas');
+  for(const key of ['before','after','group']) evidence.set(key,new Blob([png],{type:'image/png'}),key+'.png');
+  const submission=await call('/picket-reports',{method:'POST',cookie:viewer,body:evidence});
+  assert.equal(submission.status,201);
+  const record=(await call('/admin/reports/'+submission.result.id+'/context',{cookie:admin})).result.report;
+  assert.equal(record.participants,'Rani, Dimas');
+  assert.equal(record.submitted_by_email,'viewer@gmail.com');
+  for(const key of ['before','after','group']){
+    const image=await call('/reports/'+record.id+'/photo?view='+key,{cookie:viewer});
+    assert.equal(Buffer.from(image.result).subarray(8,12).toString(),'WEBP');
+  }
+  evidence.delete('group');
+  assert.equal((await call('/picket-reports',{method:'POST',cookie:viewer,body:evidence})).status,400);
   const photo=new FormData();
   photo.set('kind','piket');
   photo.set('date','2026-11-27');
@@ -76,7 +91,7 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
   const memberId=member.result.id;
   assert.equal((await call('/admin/members/'+memberId+'/fingerprint',{method:'PATCH',cookie:admin,body:{fingerprint_id:99}})).status,200);
   const eventId=randomUUID();
-  const scan=(options={})=>call('/iot/fingerprint-attendance',{method:'POST',body:{device_id:'ESP32-C1-LAB-01',fingerprint_id:99,event_id:eventId,...options.body},headers:options.headers??{'X-Device-Token':'demo-local-device-token'}});
+  const scan=(options={})=>call('/iot/fingerprint-attendance',{method:'POST',body:{device_id:'ESP32-C3-LAB-01',fingerprint_id:99,event_id:eventId,...options.body},headers:options.headers??{'X-Device-Token':'demo-local-device-token'}});
   assert.equal((await scan({headers:{}})).status,401);
   const firstScan=await scan();
   assert.equal(firstScan.status,200);

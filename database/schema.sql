@@ -39,13 +39,20 @@ CREATE TABLE IF NOT EXISTS attendances (
   id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   member_id integer NOT NULL REFERENCES members(id),
   date date NOT NULL, check_in_time time, check_out_time time,
-  method text NOT NULL CHECK (method IN ('esp32_c1_fingerprint','manual')),
+  method text NOT NULL CONSTRAINT attendance_method_c3 CHECK (method IN ('esp32_c3_fingerprint','manual')),
   status text NOT NULL CONSTRAINT attendance_status_with_absence CHECK (status IN ('present','absent','excused','competition')),
   notes text NOT NULL DEFAULT '', last_scan_at timestamptz,
   UNIQUE(member_id,date),
   CHECK (check_out_time IS NULL OR (check_in_time IS NOT NULL AND check_out_time >= check_in_time)),
   CHECK (status = 'present' OR (check_in_time IS NULL AND check_out_time IS NULL))
 );
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_constraint WHERE conrelid='attendances'::regclass AND conname='attendances_method_check') THEN
+    ALTER TABLE attendances DROP CONSTRAINT attendances_method_check;
+    UPDATE attendances SET method='esp32_c3_fingerprint' WHERE method='esp32_c1_fingerprint';
+    ALTER TABLE attendances ADD CONSTRAINT attendance_method_c3 CHECK (method IN ('esp32_c3_fingerprint','manual'));
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS attendance_date ON attendances(date);
 CREATE TABLE IF NOT EXISTS scan_events (
   device_id text NOT NULL REFERENCES devices(id),
@@ -75,6 +82,10 @@ CREATE TABLE IF NOT EXISTS reports (
   CHECK (verification_status <> 'rejected' OR length(trim(verification_note)) > 0)
 );
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS photo_data bytea;
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS before_photo bytea;
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS after_photo bytea;
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS participants text;
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS uploader_name text;
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS picket_snapshot jsonb;
 CREATE TABLE IF NOT EXISTS admin_changes (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

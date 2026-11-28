@@ -26,7 +26,7 @@ export async function createApp(env=process.env,demo=false,fixturePasswords={}) 
   const adminEmail=env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
   const adminPassword=env.BOOTSTRAP_ADMIN_PASSWORD;
   const setupAdmin=adminEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail) && adminPassword?.length>=8 && adminPassword.length<=128;
-  const cfg={demo,adminEmail,demoEmail:env.OWNER_DEMO_EMAIL?.trim().toLowerCase(),url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C1-LAB-01',
+  const cfg={demo,adminEmail,demoEmail:env.OWNER_DEMO_EMAIL?.trim().toLowerCase(),url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C3-LAB-01',
     deviceToken:demo?'demo-local-device-token':(env.DEVICE_TOKEN?.length>=32?env.DEVICE_TOKEN:null),
     storage: demo?await mkdtemp(join(tmpdir(),'elite-demo-')):resolve(env.STORAGE_DIR||join(root,'storage')),root};
   const storageFromDist=relative(join(root,'dist'),cfg.storage);

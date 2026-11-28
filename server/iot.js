@@ -32,7 +32,7 @@ export function iot(app,db,cfg) {
       let type='IN';
       if (!attendance) {
         await rows(tx,`INSERT INTO attendances(member_id,date,check_in_time,status,method,last_scan_at)
-          VALUES ($1,$2,$3,'present','esp32_c1_fingerprint',$4)`,member.id,date,time,now.toISOString());
+          VALUES ($1,$2,$3,'present','esp32_c3_fingerprint',$4)`,member.id,date,time,now.toISOString());
       } else if (attendance.status!=='present' || attendance.check_out_time) type='UNCHANGED';
       else if (attendance.last_scan_at && now-new Date(attendance.last_scan_at)<90000) type='DUPLICATE';
       else if (!attendance.check_in_time) {

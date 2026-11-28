@@ -1,7 +1,9 @@
 import { api,compress } from './api.js';
-import { badge,btn,empty,formatDate,h,icon,roster,memberStudy } from './ui.js';
+import { badge,btn,evidenceImages,evidenceViews,empty,formatDate,h,icon,roster,memberStudy } from './ui.js';
 import { adminPanel,attendance,attendanceTable,availablePages,dashboard,gallery,home,login,pages,picket,shell } from './views.js';
 import { commandLinks,recentActivity,trendChart } from './operations-view.js';
+
+import {demoEvidence,saveDemoEvidence} from './demo-evidence.js';
 
 const $=(selector,el=document)=>el.querySelector(selector);
 const root=$('#app'),dialog=$('#dialog');
@@ -51,19 +53,6 @@ function updateNavigation(page){
   $('.layout').classList.remove('nav-open');
   $('.menu').setAttribute('aria-expanded','false');
 }
-async function swapContent(update,direction){
-  if(!direction) return update();
-  if(!reduced.matches && document.startViewTransition){
-    document.documentElement.dataset.pageDirection=direction;
-    const transition=document.startViewTransition(update);
-    await transition.updateCallbackDone;
-    return;
-  }
-  update();
-  const distance=reduced.matches?5:24;
-  const start={transform:'translateX('+(direction==='back'?-distance:distance)+'px)'};
-  $('#main')?.animate([start,{transform:'none'}],{duration:reduced.matches?120:220,easing:'ease-out'});
-}
 function currentPage() {
   const requested=location.hash.match(/^#\/([a-z]+)$/)?.[1];
   return pages.some(([key])=>key===requested) && (requested!=='admin'||isAdmin())?requested:'beranda';
@@ -74,7 +63,7 @@ async function paint({replace=false,append=false,direction=null}={}) {
   if(!state.session.user) return;
   const version=++paintVersion, page=state.page, admin=isAdmin(), tab=state.tab;
   const operational=page==='dashboard';
-  const [overview,insights]=await Promise.all([api('/overview'),operational?api('/insights'):null]);
+  const [overview,insights]=await Promise.all([(direction&&state.overview?state.overview:api('/overview')),operational?api('/insights'):null]);
   if(version!==paintVersion) return;
   state.overview=overview;
   state.insights=insights;
@@ -96,11 +85,13 @@ async function paint({replace=false,append=false,direction=null}={}) {
   }
   if(page==='piket'||page==='dokumentasi'||(page==='admin'&&tab==='queue')) {
     const cursor=append&&state.photos.length?'&before='+state.photos.at(-1).id:'';
-    photos=await api(reportUrl(page)+cursor);
+    const [records,rosterItems]=await Promise.all([api(reportUrl(page)+cursor),page==='piket'?api('/picket?day='+day):null]);
+    photos=records;
     canLoadMore=photos.length===24;
     if(append) photos=[...state.photos,...photos];
     if(page==='piket') {
-      items=await api('/picket?day='+day);
+      items=rosterItems;
+      if(state.session.user.owner_demo&&!append) photos=[...await demoEvidence(state.session.user.email),...photos];
       output=picket(state,items,photos,admin);
     } else if(page==='dokumentasi') output=gallery(photos,admin);
     else output=adminPanel(tab,photos,state.session.user);
@@ -110,7 +101,7 @@ async function paint({replace=false,append=false,direction=null}={}) {
     output=adminPanel(tab,items,state.session.user);
   }
   if(version!==paintVersion) return;
-  await swapContent(()=>{
+  {
     if(version!==paintVersion) return;
     state.items=items||[];
     state.photos=photos||[];
@@ -122,7 +113,7 @@ async function paint({replace=false,append=false,direction=null}={}) {
     else reveals.disconnect();
     if(canLoadMore===false) $('.more-report')?.remove();
     if(page==='absensi') drawAttendance();
-  },direction);
+  }
 }
 function drawAttendance() {
   const filter=$('#attendance-status');
@@ -136,14 +127,20 @@ function drawAttendance() {
 async function navigate(first=false) {
   const next=currentPage();
   if(!state.session?.user || (state.page===next&&!first)) return;
-  const previous=state.page;
-  const order=slug=>pages.findIndex(([key])=>key===slug);
+
+
   state.page=next;
   try {
-    await paint({replace:first,direction:first?null:order(next)<order(previous)?'back':'forward'});
+    if(!first && $('#main')){
+      updateNavigation(next);
+      $('#main').innerHTML='<header class="page-head"><h1>'+h(pages.find(([key])=>key===next)[1])+'</h1></header>';
+      window.scrollTo(0,0);
+    }
+    await paint({replace:first,direction:!first});
   } catch(error) {
     if(state.page===next){
-      state.page=previous;
+      state.page='';
+      if($('#main')) $('#main').innerHTML='<p class="empty">'+h(error.message)+' '+btn('Coba lagi','retryPage','outline')+'</p>';
       notice(error.message,true);
     }
   }
@@ -199,6 +196,29 @@ async function openAction(action,value) {
       persist('/attendance','PUT',x=>({...x,member_id:Number(x.member_id),check_in_time:x.check_in_time||null,check_out_time:x.check_out_time||null})));
     syncTimes();
   }
+  if(action==='upload' && value==='piket'){
+    const day=new Date(currentDate()+'T12:00:00Z');
+    day.setUTCDate(day.getUTCDate()-(day.getUTCDay()-state.day+7)%7);
+    showDialog('Unggah bukti piket',
+      field('Tanggal piket','<input type="date" name="date" required value="'+day.toISOString().slice(0,10)+'">')+
+      field('Nama petugas dalam foto bersama','<textarea required name="participants" minlength="2" maxlength="500" placeholder="Pisahkan nama dengan koma"></textarea>')+
+      evidenceViews.map(([key,label])=>field(label,'<input required type="file" accept="image/*" name="'+key+'">')).join('')+
+      '<p class="hint">Diunggah sebagai '+h(state.session.user.name||state.session.user.email)+(state.session.user.owner_demo?'. Bukti demo tersimpan di browser ini.':'.')+'</p>',
+      async(values,form)=>{
+        if(![1,2,3,4,5].includes(new Date(values.date+'T12:00:00Z').getUTCDay())) throw Error('Pilih hari Senin sampai Jumat.');
+        if(values.participants.trim().length<2) throw Error('Isi nama petugas yang hadir.');
+        const payload=new FormData();let size=0;
+        payload.set('date',values.date);payload.set('participants',values.participants.trim());
+        for(const [key] of evidenceViews){
+          const image=await compress(form.elements[key].files[0]);size+=image.size;
+          payload.set(key,image,'piket.webp');
+        }
+        if(size>4_000_000) throw Error('Total foto terlalu besar. Pilih foto berukuran lebih kecil.');
+        if(state.session.user.owner_demo) await saveDemoEvidence(state.session.user,payload);
+        else await api('/picket-reports','POST',payload);
+      },'Kirim bukti');
+    return;
+  }
   if(action==='upload') {
     const doc=value==='dokumentasi';
     showDialog(doc?'Unggah dokumentasi':'Unggah bukti piket',
@@ -224,7 +244,7 @@ async function openAction(action,value) {
   }
   if(action==='review') {
     const {report,attendance:matches,allAttendance,picket:planned}=await api('/admin/reports/'+Number(value)+'/context');
-    showDialog('Verifikasi foto',`<div class="review-grid"><section><img class="full-photo" src="${h(report.photo_url)}" alt="${h(report.caption)}"><h3>${h(report.caption)}</h3><p>${formatDate(report.date,true)} · ${h(report.submitted_by_email)}</p>${badge(report.verification_status)}</section><section><h3>Absensi pembanding</h3>${attendanceTable(matches)}${allAttendance.length>matches.length?'<details><summary>Seluruh absensi tanggal ini</summary>'+attendanceTable(allAttendance)+'</details>':''}<h3>Petugas terjadwal</h3>${roster(planned)}</section></div>`+
+    showDialog('Verifikasi foto',`<div class="review-grid"><section>${report.participants?evidenceImages(report)+'<p>Petugas: '+h(report.participants)+'</p>':'<img class="full-photo" src="'+h(report.photo_url)+'" alt="Foto laporan">'}<h3>${h(report.caption)}</h3><p>${formatDate(report.date,true)} · Diunggah oleh ${h(report.uploader_name||report.submitted_by_email)}</p>${badge(report.verification_status)}</section><section><h3>Absensi pembanding</h3>${attendanceTable(matches)}${allAttendance.length>matches.length?'<details><summary>Seluruh absensi tanggal ini</summary>'+attendanceTable(allAttendance)+'</details>':''}<h3>Petugas terjadwal</h3>${roster(planned)}</section></div>`+
       field('Keputusan','<select name="status" required><option value="">Pilih keputusan</option><option value="approved">Disetujui</option><option value="rejected">Perlu revisi</option></select>')+
       field('Catatan verifikasi','<textarea name="note" maxlength="500" rows="2" placeholder="Wajib jika perlu revisi"></textarea>'),
       persist('/admin/reports/'+report.id,'PATCH',x=>x),'Simpan keputusan');
@@ -279,6 +299,13 @@ async function getSession(boot=false) {
   } else await navigate(true);
 }
 document.addEventListener('click',async event=>{
+  const image=event.target.closest('[data-evidence]');
+  if(image){
+    event.preventDefault();
+    const photo=image.querySelector('img');
+    if(dialog.open){window.open(photo.src,'_blank','noopener');return;}
+    showDialog(photo.alt,'<img class="full-photo" alt="'+h(photo.alt)+'" src="'+h(photo.src)+'">');return;
+  }
   const route=event.target.closest('.command-links a');
   if(route) {dialog.close();return;}
   const button=event.target.closest('[data-action]');
@@ -292,6 +319,7 @@ document.addEventListener('click',async event=>{
       button.setAttribute('aria-expanded',opened);
       return;
     }
+    if(action==='retryPage') return navigate();
     if(action==='command') return openCommand();
     if(action==='period') {
       state.period=Number(value);

@@ -5,7 +5,7 @@ flowchart LR
   U[Browser Admin atau Pelihat] -->|HTTPS dan cookie sesi| API[Express + REST]
   API <-->|SQL dan transaksi| DB[(PostgreSQL)]
   API -->|WebP privat| DB
-  S[Sensor AS608 / R307] -->|UART dan ID slot| I[ESP32-C1]
+  S[Sensor AS608 / R307] -->|UART dan ID slot| I[ESP32-C3]
   I -->|HTTPS dan X-Device-Token| API
 ```
 
@@ -48,7 +48,7 @@ Semua rute berikut berawalan `/api`. POST/PUT/PATCH/DELETE browser menggunakan o
 
 ```json
 {
-  "device_id": "ESP32-C1-LAB-01",
+  "device_id": "ESP32-C3-LAB-01",
   "fingerprint_id": 12,
   "event_id": "935d4ddc-fc18-479d-8da3-28300d488b61"
 }

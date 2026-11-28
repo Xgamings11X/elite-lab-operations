@@ -20,8 +20,17 @@ const attendanceQuery=`SELECT a.id,a.member_id,a.date::text,a.check_in_time,a.ch
   m.full_name,m.class_name,m.division FROM attendances a JOIN members m ON m.id=a.member_id WHERE a.date=$1 ORDER BY a.check_in_time NULLS LAST,m.full_name`;
 const picketQuery=`SELECT p.id,m.id AS member_id,m.full_name,m.class_name,m.division FROM picket_schedules p
   JOIN members m ON m.id=p.member_id WHERE p.day_of_week BETWEEN 1 AND 5 AND p.day_of_week=$1 AND m.is_active ORDER BY m.full_name`;
-const reportQuery=`SELECT id,kind,date::text,division,caption,verification_status,verification_note,verified_by_email,verified_at,submitted_by_email,created_at,
+const reportQuery=`SELECT id,kind,date::text,division,caption,verification_status,verification_note,verified_by_email,verified_at,submitted_by_email,uploader_name,participants,created_at,
   '/api/reports/' || id || '/photo' AS photo_url FROM reports`;
+
+async function encodePhoto(file){
+    try {
+      const source=sharp(file.buffer,{limitInputPixels:32_000_000});
+      const {format,pages}=await source.metadata();
+      if(!['jpeg','png','webp','heif'].includes(format)||pages>1) throw Error();
+      return await source.rotate().resize(1600,1600,{fit:'inside',withoutEnlargement:true}).webp({quality:78}).toBuffer();
+    } catch { throw fail(415,'Gunakan foto JPEG, PNG, HEIC, atau WebP yang dapat dibuka.'); }
+}
 
 export function registerRoutes(app,db,cfg) {
   app.get('/api/overview',async(req,res)=>{
@@ -82,24 +91,35 @@ export function registerRoutes(app,db,cfg) {
       ORDER BY id DESC LIMIT 24`,query.kind??null,Boolean(query.pending),query.before??null));
   });
   app.get('/api/reports/:id/photo',async(req,res,next)=>{
-    const report=await first(db,'SELECT kind,photo_key,demo_asset,photo_data FROM reports WHERE id=$1',id.parse(req.params.id));
+    const view=z.enum(['group','before','after']).parse(req.query.view??'group');
+    const column={before:'before_photo',after:'after_photo',group:'photo_data'}[view];
+    const report=await first(db,'SELECT kind,photo_key,demo_asset,'+column+' AS photo_data FROM reports WHERE id=$1',id.parse(req.params.id));
     if(!report) throw fail(404,'Foto tidak ditemukan.');
     if(report.photo_data) return res.type('image/webp').send(Buffer.from(report.photo_data));
+    if(view!=='group') throw fail(404,'Foto tidak ditemukan.');
     const path=report.demo_asset ? join(cfg.root,'server','demo-assets',report.photo_key+'.webp') : join(cfg.storage,report.kind,report.photo_key);
     res.set('Content-Type','image/webp');
     res.sendFile(path,{cacheControl:false},error=>{if(error) next(error);});
+  });
+  const evidence=multer({limits:{files:3,fileSize:4_000_000,fields:2,fieldSize:2048}});
+  app.post('/api/picket-reports',evidence.fields(['before','after','group'].map(name=>({name,maxCount:1}))),async(req,res)=>{
+    const day=date.parse(req.body.date);
+    const participants=z.string().trim().min(2).max(500).parse(req.body.participants);
+    if(![1,2,3,4,5].includes(weekday(day))) throw fail(400,'Piket berlangsung Senin sampai Jumat.');
+    const files=['before','after','group'].map(name=>req.files?.[name]?.[0]);
+    if(files.some(file=>!file)) throw fail(400,'Lengkapi ketiga foto piket.');
+    const [before,after,group]=await Promise.all(files.map(encodePhoto));
+    const snapshot=await rows(db,picketQuery,weekday(day));
+    const result=await first(db,`INSERT INTO reports(kind,date,caption,photo_key,submitted_by_email,uploader_name,
+      participants,picket_snapshot,before_photo,after_photo,photo_data) VALUES ('piket',$1,'Bukti piket',$2,$3,$4,$5,$6::jsonb,$7,$8,$9) RETURNING id`,
+      day,randomUUID()+'.webp',req.user.email,req.user.name,participants,JSON.stringify(snapshot),before,after,group);
+    res.status(201).json(result);
   });
   app.post('/api/reports',admin,upload.single('photo'),async(req,res)=>{
     const item=z.object({kind,date,division:division.optional(),caption:z.string().trim().min(3).max(500)}).parse(req.body);
     if (item.kind==='piket' && ![1,2,3,4,5].includes(weekday(item.date))) throw fail(400,'Piket berlangsung Senin sampai Jumat.');
     if (!req.file || (item.kind==='dokumentasi' && !item.division)) throw fail(400,'Pilih foto dan jurusan yang sesuai.');
-    let output;
-    try {
-      const source=sharp(req.file.buffer,{limitInputPixels:32_000_000});
-      const {format,pages}=await source.metadata();
-      if(!['jpeg','png','webp','heif'].includes(format)||pages>1) throw Error();
-      output=await source.rotate().resize(1600,1600,{fit:'inside',withoutEnlargement:true}).webp({quality:78}).toBuffer();
-    } catch { throw fail(415,'Gunakan foto JPEG, PNG, HEIC, atau WebP yang dapat dibuka.'); }
+    const output=await encodePhoto(req.file);
     const key=randomUUID()+'.webp';
     const result=await db.transaction(async tx=>{
         const snapshot=item.kind==='piket'?JSON.stringify(await rows(tx,picketQuery,weekday(item.date))):null;

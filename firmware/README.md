@@ -1,6 +1,6 @@
-# Firmware fingerprint ESP32-C1
+# Firmware fingerprint ESP32-C3
 
-Contoh Arduino/C++ ada di `elite_fingerprint/elite_fingerprint.ino`. Identitas perangkat default adalah `ESP32-C1-LAB-01`. Daftar resmi Arduino Espressif tidak menampilkan profil papan bernama ESP32-C1. Cocokkan profil board/core yang diberikan pemasok dengan papan fisik sebelum kompilasi. Contoh memerlukan core dengan UART, Wi-Fi, pustaka HTTPClient/WiFiClientSecure, serta pustaka **Adafruit Fingerprint Sensor Library**. Kompatibilitas dengan unit fisik dan varian firmware AS608/R307 belum diuji.
+Contoh Arduino/C++ ada di `elite_fingerprint/elite_fingerprint.ino`. Identitas perangkat default adalah `ESP32-C3-LAB-01`. Pilih ESP32C3 Dev Module atau profil ESP32-C3 yang sesuai di Arduino IDE. Pada instalasi lama, pertahankan DEVICE_ID terdaftar pada server dan sketch agar tautan anggota tetap berlaku. Contoh memerlukan core dengan UART, Wi-Fi, pustaka HTTPClient/WiFiClientSecure, serta pustaka **Adafruit Fingerprint Sensor Library**. Kompatibilitas dengan unit fisik dan varian firmware AS608/R307 belum diuji.
 
 1. Salin `secrets.example.h` ke `secrets.h` di folder sketch. Isi pin UART, Wi-Fi, domain HTTPS, CA sertifikat yang dipercaya, dan token yang sama dengan backend. `DEVICE_ID` hanya menggunakan huruf, angka, titik, garis bawah atau tanda hubung.
 2. Hubungkan GND bersama. Silangkan TX sensor → RX papan dan RX sensor → TX papan. Periksa tegangan catu dan level logika pada datasheet modul yang dipakai sebelum menghubungkan. Gunakan penyesuai level bila diperlukan. Cek baud modul, default contoh 57600.

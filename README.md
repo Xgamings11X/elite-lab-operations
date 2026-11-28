@@ -36,7 +36,7 @@ Piket berlangsung Senin–Jumat dan presensi ekskul berlangsung Sabtu (WIB). Fot
 | `frontend/` | Komponen portal, ES modules, Tailwind CSS, navigasi ikon, grafik kehadiran, logo dan favicon, dialog admin |
 | `server/` | Express, OAuth Google, sesi dan RBAC, upload foto, webhook dan heartbeat |
 | `database/schema.sql` | Skema, constraint, dan indeks PostgreSQL |
-| `firmware/` | Sketch Arduino/C++, template pengaturan, wiring dan enrollment ESP32-C1 |
+| `firmware/` | Sketch Arduino/C++, template pengaturan, wiring dan enrollment ESP32-C3 |
 | `test/` | Uji integrasi REST dengan data fiktif |
 | `compose.yaml` | PostgreSQL lokal opsional |
 
