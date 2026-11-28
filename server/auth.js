@@ -41,7 +41,7 @@ export function authentication(app,db,cfg) {
   const credentials=z.object({email:z.string().trim().toLowerCase().email().max(254),password:z.string().min(1).max(128)});
   app.post('/api/auth/signup',async(req,res)=>{
     const {email,name,password}=credentials.extend({name:z.string().trim().min(2).max(120),password:z.string().min(8).max(128)}).parse(req.body);
-    if(email===cfg.demoEmail) throw fail(409,'Email sudah digunakan.');
+    if(email===cfg.demoEmail || email===cfg.adminEmail) throw fail(409,'Email sudah digunakan.');
     const recovery=token();
     const hash=await passwordHash(password);
     const account=await first(db,`INSERT INTO users(email,name,password_hash,recovery_hash,role,is_active) VALUES ($1,$2,$3,$4,'viewer',false)

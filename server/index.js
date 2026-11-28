@@ -21,22 +21,26 @@ export async function createApp(env=process.env,demo=false,fixturePasswords={}) 
   const loopback=['localhost','127.0.0.1','[::1]'].includes(url.hostname);
   if (url.protocol!=='https:' && !(url.protocol==='http:' && loopback)) throw Error('APP_URL harus HTTPS di luar loopback.');
   if (demo && (host!=='127.0.0.1'||!loopback)) throw Error('Demo hanya untuk loopback.');
-  if (!demo && (!env.DATABASE_URL || !env.BOOTSTRAP_ADMIN_EMAIL?.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) || (env.BOOTSTRAP_ADMIN_PASSWORD?.length??0)<8 || env.BOOTSTRAP_ADMIN_PASSWORD.length>128)) throw Error('Lengkapi DATABASE_URL, email dan kata sandi admin (8–128 karakter).');
-  const cfg={demo,demoEmail:env.OWNER_DEMO_EMAIL?.trim().toLowerCase(),url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C1-LAB-01',
+  const connectionString=env.DATABASE_URL?.trim() || env.POSTGRES_URL?.trim();
+  if (!demo && !connectionString) throw Object.assign(new Error('Database anggota belum terhubung.'),{code:'MEMBER_DB_MISSING'});
+  const adminEmail=env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+  const adminPassword=env.BOOTSTRAP_ADMIN_PASSWORD;
+  const setupAdmin=adminEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail) && adminPassword?.length>=8 && adminPassword.length<=128;
+  const cfg={demo,adminEmail,demoEmail:env.OWNER_DEMO_EMAIL?.trim().toLowerCase(),url,host,port:Number(env.PORT||url.port||4173),device:env.DEVICE_ID||'ESP32-C1-LAB-01',
     deviceToken:demo?'demo-local-device-token':(env.DEVICE_TOKEN?.length>=32?env.DEVICE_TOKEN:null),
     storage: demo?await mkdtemp(join(tmpdir(),'elite-demo-')):resolve(env.STORAGE_DIR||join(root,'storage')),root};
   const storageFromDist=relative(join(root,'dist'),cfg.storage);
   if (!demo && !isAbsolute(storageFromDist) && !/^\.\.(?:[\\/]|$)/.test(storageFromDist)) throw Error('Lokasi foto harus di luar folder dist.');
   if (!/^[a-zA-Z0-9._-]{1,80}$/.test(cfg.device)) throw Error('Format DEVICE_ID tidak sah.');
-  const db=await database(demo?null:env.DATABASE_URL);
+  const db=await database(demo?null:connectionString);
   if (!env.VERCEL) await mkdir(cfg.storage,{recursive:true});
   await rows(db,'INSERT INTO devices(id) VALUES ($1) ON CONFLICT DO NOTHING',cfg.device);
   if (demo) {
     const accounts=await seedDemo(db,cfg.device);
     for(const role of ['admin','viewer']) if(fixturePasswords[role]) await rows(db,'UPDATE users SET password_hash=$2 WHERE id=$1',accounts[role],await passwordHash(fixturePasswords[role]));
   }
-  else {
-    const email=env.BOOTSTRAP_ADMIN_EMAIL.trim().toLowerCase();
+  else if (setupAdmin) {
+    const email=adminEmail;
     const existing=(await rows(db,'SELECT password_hash FROM users WHERE email=$1',email))[0];
     if(!existing?.password_hash) await rows(db,`INSERT INTO users(email,role,password_hash) VALUES ($1,'admin',$2)
       ON CONFLICT(email) DO UPDATE SET password_hash=excluded.password_hash WHERE users.role='admin' AND users.password_hash IS NULL`,

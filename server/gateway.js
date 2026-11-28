@@ -51,6 +51,9 @@ export async function createApp(env=process.env,demo=false,fixtures={}){
     return res.status(403).json({error:'Akun demo hanya dapat melihat data contoh.'});
   });
   app.use(async(req,res)=>{
+    if(!demo && !env.DATABASE_URL?.trim() && !env.POSTGRES_URL?.trim()){
+      return res.status(503).json({code:'MEMBER_DB_MISSING',error:'Database anggota belum terhubung. Hubungi pengelola ELITE.'});
+    }
     try{
       backend??=import('./index.js').then(m=>m.createApp(env,demo,fixtures)).catch(e=>{backend=undefined;throw e});
       return (await backend).app(req,res);
