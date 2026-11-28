@@ -4,7 +4,7 @@ import { adminPanel,attendance,attendanceTable,availablePages,dashboard,gallery,
 import { commandLinks,recentActivity,trendChart } from './operations-view.js';
 
 const $=(selector,el=document)=>el.querySelector(selector);
-const root=$('#app'),dialog=$('#dialog'),overlay=$('#transition');
+const root=$('#app'),dialog=$('#dialog');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 function applyMotion(){
   document.documentElement.dataset.motion=reduced.matches?'calm':'on';
@@ -12,7 +12,7 @@ function applyMotion(){
 }
 reduced.addEventListener('change',applyMotion);
 const state={day:0,date:'',statusFilter:'',attendanceSearch:'',period:7,insights:null,tab:'queue',page:'',items:[],photos:[],overview:null,session:null};
-let busy=false,selectedForm,noticeTimer,paintVersion=0,transitionVersion=0;
+let busy=false,selectedForm,noticeTimer,paintVersion=0;
 const isAdmin=()=>state.session.user?.role==='admin';
 function notice(message,error=false) {
   const toast=$('#toast');
@@ -32,25 +32,32 @@ function watchSections(){
   reveals.disconnect();
   if(reduced.matches) return;
   for(const item of root.querySelectorAll('.guide-grid article,.week-board,.ops-panel,.quick-grid,.panel,.report,.page-head')) {
+    const bounds=item.getBoundingClientRect();
+    if(bounds.top<innerHeight && bounds.bottom>0) continue;
     item.classList.add('reveal-ready');
     reveals.observe(item);
   }
 }
-async function transition(task,first=false) {
-  const current=++transitionVersion;
-
-  overlay.querySelector('.route-label').textContent=first?'Membuka ELITE':('Membuka '+(pages.find(p=>p[0]===state.page)?.[1]||'halaman'));
-  overlay.className='route-loading';
-  const previous=root.querySelector('#main');
-  if(!first && !reduced.matches) previous?.animate([{opacity:1},{opacity:.72}],{duration:130,fill:'none'});
-  try { await task(); }
-  finally {
-    if(current===transitionVersion){
-      const content=root.querySelector('#main');
-      content?.animate(reduced.matches?[{opacity:.78},{opacity:1}]:[{opacity:.55,transform:'translateY(14px)'},{opacity:1,transform:'none'}],{duration:reduced.matches?180:340,easing:'cubic-bezier(.2,.8,.2,1)'});
-      setTimeout(()=>{if(current===transitionVersion) overlay.className='';},420);
-    }
+function updateNavigation(page){
+  for(const link of root.querySelectorAll('.sidebar nav a')){
+    if(link.hash==='#/'+page) link.setAttribute('aria-current','page');
+    else link.removeAttribute('aria-current');
   }
+  $('.crumb strong').textContent=pages.find(([slug])=>slug===page)[1];
+  $('.layout').classList.remove('nav-open');
+  $('.menu').setAttribute('aria-expanded','false');
+}
+async function swapContent(update,direction){
+  if(!direction) return update();
+  if(!reduced.matches && document.startViewTransition){
+    document.documentElement.dataset.pageDirection=direction;
+    const transition=document.startViewTransition(update);
+    await transition.updateCallbackDone;
+    return;
+  }
+  update();
+  const start=reduced.matches?{opacity:.8}:{opacity:.7,transform:'translateX('+(direction==='back'?-12:12)+'px)'};
+  $('#main')?.animate([start,{opacity:1,transform:'none'}],{duration:reduced.matches?120:220,easing:'ease-out'});
 }
 function currentPage() {
   const requested=location.hash.match(/^#\/([a-z]+)$/)?.[1];
@@ -58,7 +65,7 @@ function currentPage() {
 }
 const reportUrl=page=>page==='admin'?'/reports?pending=true':page==='piket'?'/reports?kind=piket':'/reports?kind=dokumentasi';
 const json=(path,method,data)=>api(path,method,data);
-async function paint({replace=false,append=false}={}) {
+async function paint({replace=false,append=false,direction=null}={}) {
   if(!state.session.user) return;
   const version=++paintVersion, page=state.page, admin=isAdmin(), tab=state.tab;
   const operational=page==='dashboard';
@@ -98,13 +105,18 @@ async function paint({replace=false,append=false}={}) {
     output=adminPanel(tab,items,state.session.user);
   }
   if(version!==paintVersion) return;
-  state.items=items||[];
-  state.photos=photos||[];
-  if(replace||!$('#main',root)||!$('.layout',root)) root.innerHTML=shell(state.session.user,state.session.demo,page);
-  $('#main').innerHTML=output;
-  watchSections();
-  if(canLoadMore===false) $('.more-report')?.remove();
-  if(page==='absensi') drawAttendance();
+  await swapContent(()=>{
+    if(version!==paintVersion) return;
+    state.items=items||[];
+    state.photos=photos||[];
+    if(replace||!$('#main',root)||!$('.layout',root)) root.innerHTML=shell(state.session.user,state.session.demo,page);
+    if(direction) updateNavigation(page);
+    $('#main').innerHTML=output;
+    if(direction){window.scrollTo(0,0);$('#main').focus({preventScroll:true});}
+    watchSections();
+    if(canLoadMore===false) $('.more-report')?.remove();
+    if(page==='absensi') drawAttendance();
+  },direction);
 }
 function drawAttendance() {
   const filter=$('#attendance-status');
@@ -118,14 +130,17 @@ function drawAttendance() {
 async function navigate(first=false) {
   const next=currentPage();
   if(!state.session?.user || (state.page===next&&!first)) return;
+  const previous=state.page;
+  const order=slug=>pages.findIndex(([key])=>key===slug);
   state.page=next;
-  await transition(async()=>{
-    try {
-      await paint({replace:true});
-      window.scrollTo(0,0);
-      if(!first) $('#main')?.focus({preventScroll:true});
-    } catch(error) { notice(error.message,true); }
-  },first);
+  try {
+    await paint({replace:first,direction:first?null:order(next)<order(previous)?'back':'forward'});
+  } catch(error) {
+    if(state.page===next){
+      state.page=previous;
+      notice(error.message,true);
+    }
+  }
 }
 function showDialog(title,body,handler=null,submit='Simpan') {
   selectedForm=handler;
@@ -402,5 +417,5 @@ setInterval(async()=>{
   }
 },12000);
 applyMotion();
-transition(()=>getSession(true),true)
-  .catch(error=>{overlay.className='';state.session={user:null,demo:false};renderAccount('signup');notice('Koneksi ke layanan anggota sedang terganggu.',true);});
+getSession(true)
+  .catch(error=>{state.session={user:null,demo:false};renderAccount('signup');notice('Koneksi ke layanan anggota sedang terganggu.',true);});

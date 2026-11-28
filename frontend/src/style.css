@@ -143,9 +143,6 @@ dialog::backdrop { background:#141518ad }
 #toast { position:fixed; z-index:15; right:15px; bottom:15px; background:#272624; color:#fff; padding:10px 14px; border-radius:8px; opacity:0; transform:translateY(12px); pointer-events:none; transition:opacity .16s,transform .16s; max-width:calc(100% - 30px) }
 #toast.visible { opacity:1; transform:none }
 #toast.error-toast { background:#8b2e25 }
-#transition { position:fixed; inset:0; z-index:99; visibility:hidden; pointer-events:none; }
-#transition.cover { visibility:visible; pointer-events:auto }
-#transition.uncover { visibility:visible }
 @keyframes blink { from { opacity:.35; transform:scale(.8) } to { opacity:1; transform:scale(1) } }
 @media(max-width:1080px) {
   .layout { grid-template-columns:198px minmax(0,1fr) }
@@ -176,5 +173,4 @@ dialog::backdrop { background:#141518ad }
 }
 @scope (html[data-motion="off"]) {
   *,*::before,*::after { scroll-behavior:auto!important; animation:none!important; transition:none!important; }
-  #transition { display:none }
 }
