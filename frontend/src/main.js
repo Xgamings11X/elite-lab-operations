@@ -8,7 +8,6 @@ const root=$('#app'),dialog=$('#dialog');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 function applyMotion(){
   document.documentElement.dataset.motion=reduced.matches?'calm':'on';
-  watchSections();
 }
 reduced.addEventListener('change',applyMotion);
 const state={day:0,date:'',statusFilter:'',attendanceSearch:'',period:7,insights:null,tab:'queue',page:'',items:[],photos:[],overview:null,session:null};
@@ -21,22 +20,27 @@ function notice(message,error=false) {
   clearTimeout(noticeTimer);
   noticeTimer=setTimeout(()=>{toast.className='';},4200);
 }
+function revealItems(items){
+  items.forEach((item,index)=>{
+    item.style.setProperty('--entry-distance',(reduced.matches?3:12+Math.min(index,5)*4)+'px');
+    item.classList.add('ui-enter');
+  });
+}
 const reveals=new IntersectionObserver(entries=>{
-  for(const entry of entries) {
-    if(!entry.isIntersecting) continue;
-    entry.target.classList.add('revealed');
-    reveals.unobserve(entry.target);
-  }
-},{threshold:.08});
+  const visible=entries.filter(entry=>entry.isIntersecting).map(entry=>entry.target);
+  revealItems(visible);
+  visible.forEach(item=>reveals.unobserve(item));
+},{threshold:0});
 function watchSections(){
   reveals.disconnect();
-  if(reduced.matches) return;
-  for(const item of root.querySelectorAll('.guide-grid article,.week-board,.ops-panel,.quick-grid,.panel,.report,.page-head')) {
-    const bounds=item.getBoundingClientRect();
-    if(bounds.top<innerHeight && bounds.bottom>0) continue;
-    item.classList.add('reveal-ready');
-    reveals.observe(item);
+  const visible=[];
+  const elements=root.querySelectorAll('.club-intro h1,.club-lede,.auth-panel,.guide-grid article,.week-board,.quick-link,.ops-metric,.ops-panel,.page-head,.panel,.report,.empty,.admin-tabs,.section-head');
+  for(const item of elements){
+    const box=item.getBoundingClientRect();
+    if(box.top<innerHeight && box.bottom>0) visible.push(item);
+    else reveals.observe(item);
   }
+  revealItems(visible);
 }
 function updateNavigation(page){
   for(const link of root.querySelectorAll('.sidebar nav a')){
@@ -56,8 +60,9 @@ async function swapContent(update,direction){
     return;
   }
   update();
-  const start=reduced.matches?{opacity:.8}:{opacity:.7,transform:'translateX('+(direction==='back'?-12:12)+'px)'};
-  $('#main')?.animate([start,{opacity:1,transform:'none'}],{duration:reduced.matches?120:220,easing:'ease-out'});
+  const distance=reduced.matches?5:24;
+  const start={transform:'translateX('+(direction==='back'?-distance:distance)+'px)'};
+  $('#main')?.animate([start,{transform:'none'}],{duration:reduced.matches?120:220,easing:'ease-out'});
 }
 function currentPage() {
   const requested=location.hash.match(/^#\/([a-z]+)$/)?.[1];
@@ -113,7 +118,8 @@ async function paint({replace=false,append=false,direction=null}={}) {
     if(direction) updateNavigation(page);
     $('#main').innerHTML=output;
     if(direction){window.scrollTo(0,0);$('#main').focus({preventScroll:true});}
-    watchSections();
+    if(replace || direction) watchSections();
+    else reveals.disconnect();
     if(canLoadMore===false) $('.more-report')?.remove();
     if(page==='absensi') drawAttendance();
   },direction);
@@ -307,6 +313,13 @@ document.addEventListener('click',async event=>{
     }
     if(action==='issueRecovery'){busy=true;const result=await api('/admin/users/'+Number(value)+'/recovery','POST',{});showRecovery(result.recovery,true);return;}
     busy=true;
+    if(action==='demoRole' && state.session.user?.owner_demo){
+      await json('/demo/role/'+value,'POST',null);
+      if(value==='viewer' && state.page==='admin') history.replaceState(null,'',location.pathname+location.search+'#/dashboard');
+      state.tab='queue';
+      await getSession(true);
+      return;
+    }
     if(action==='logout') {
       if(dialog.open) dialog.close();
       await json('/auth/logout','POST',null);
@@ -417,5 +430,16 @@ setInterval(async()=>{
   }
 },12000);
 applyMotion();
-getSession(true)
-  .catch(error=>{state.session={user:null,demo:false};renderAccount('signup');notice('Koneksi ke layanan anggota sedang terganggu.',true);});
+getSession(true).catch(()=>{
+  if($('.restore-header')){
+    const main=$('#main');
+    main.removeAttribute('aria-busy');
+    main.className='content';
+    main.innerHTML='<p>Sesi belum bisa diperiksa. Periksa koneksi, lalu coba lagi.</p><button class="btn outline" type="button">Coba lagi</button>';
+    main.querySelector('button').addEventListener('click',()=>location.reload());
+    return;
+  }
+  state.session={user:null,demo:false};
+  renderAccount('signup');
+  notice('Koneksi ke layanan anggota sedang terganggu.',true);
+});

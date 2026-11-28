@@ -1,3 +1,4 @@
+import { SESSION_HOURS, SESSION_MS } from './session-duration.js';
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { z } from 'zod';
@@ -21,8 +22,8 @@ export function authentication(app,db,cfg) {
     await dropSession(req,res);
     await rows(db,'DELETE FROM sessions WHERE expires_at < now()');
     const raw = token();
-    await rows(db,"INSERT INTO sessions(token_hash,user_id,expires_at) VALUES ($1,$2, now() + interval '12 hours')",digest(raw),id);
-    res.cookie('elite_session',raw,{...options,maxAge:43200000});
+    await rows(db,"INSERT INTO sessions(token_hash,user_id,expires_at) VALUES ($1,$2, now() + $3::int * interval '1 hour')",digest(raw),id,SESSION_HOURS);
+    res.cookie('elite_session',raw,{...options,maxAge:SESSION_MS});
   }
   async function dropSession(req,res) {
     const raw = cookie(req,'elite_session');

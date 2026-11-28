@@ -27,8 +27,8 @@ export function shell(user,demo,current) {
     <div class="workspace"><header class="topbar">
       <button class="menu icon-button" aria-controls="sidebar" aria-expanded="false" data-action="menu" aria-label="Buka menu">${icon('menu')}</button>
       <a class="mobile-brand" href="#/beranda" aria-label="ELITE Beranda">${logo()}</a><div class="crumb"><span>Ruang kerja</span>${icon('chevron-right',14)}<strong>${label}</strong></div>
-      <div class="top-right"><button class="search-trigger" type="button" data-action="command" aria-label="Cari halaman">${icon('search',17)}<span>Cari halaman</span><kbd>${/Mac/i.test(navigator.platform)?'⌘':'Ctrl'} K</kbd></button>
-      ${user.owner_demo?'<span class="demo-label">Data contoh</span>':''}<details class="account"><summary><span class="profile-avatar">${h(initials(user.name||user.email))}</span><span class="account-text"><strong>${h(user.name||user.email)}</strong><small>${user.role==='admin'?'Admin':'Pelihat'}</small></span>${icon('chevron-down',15)}</summary><div class="account-menu"><span>${h(user.email)}</span>${btn('Keluar','logout','outline','log-out')}</div></details></div>
+      <div class="top-right"><button class="search-trigger" type="button" data-action="command" aria-label="Cari halaman">${icon('search',17)}<span>Cari halaman</span></button>
+      ${user.owner_demo?'<span class="demo-label">Data contoh</span>':''}<details class="account"><summary><span class="profile-avatar">${h(initials(user.name||user.email))}</span><span class="account-text"><strong>${h(user.name||user.email)}</strong><small>${user.role==='admin'?'Admin':'Pelihat'}</small></span>${icon('chevron-down',15)}</summary><div class="account-menu"><span>${h(user.email)}</span>${user.owner_demo?btn(user.role==='viewer'?'Lihat sebagai Admin':'Lihat sebagai Pelihat','demoRole:'+(user.role==='viewer'?'admin':'viewer'),'outline','users'):''}${btn('Keluar','logout','outline','log-out')}</div></details></div>
     </header><main id="main" tabindex="-1" class="content"></main>${portalFooter(user)}</div></div>`;
 }
 

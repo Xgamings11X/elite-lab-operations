@@ -22,12 +22,14 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
       ...(body&&!multipart?{'Content-Type':'application/json'}:{}),...headers,
     },body:body?(multipart?body:JSON.stringify(body)):undefined});
     const result=response.headers.get('content-type')?.includes('json')?await response.json():await response.arrayBuffer();
-    return {status:response.status,result,cookie:response.headers.getSetCookie().find(value=>value.startsWith('elite_session=')&&!value.startsWith('elite_session=;'))?.split(';')[0]};
+    return {status:response.status,result,sessionDays:response.headers.getSetCookie().some(value=>value.startsWith('elite_session=') && value.includes('Max-Age=172800')),cookie:response.headers.getSetCookie().find(value=>value.startsWith('elite_session=')&&!value.startsWith('elite_session=;'))?.split(';')[0]};
   }
   const login=(role)=>call('/auth/signin',{method:'POST',body:{email:role+'@gmail.com',password:'local-'+role+'-test'}});
   assert.equal((await call('/overview')).status,401);
   assert.equal((await call('/auth/demo',{method:'POST',body:{role:'admin'},headers:{Origin:'https://example.org'}})).status,403);
-  const {cookie:admin}=await login('admin'),{cookie:viewer}=await login('viewer');
+  const adminLogin=await login('admin');
+  assert.ok(adminLogin.sessionDays);
+  const {cookie:admin}=adminLogin,{cookie:viewer}=await login('viewer');
   const {result:{today,summary}}=await call('/overview',{cookie:admin});
   assert.equal(summary.present,18);
   assert.equal((await call('/overview',{cookie:viewer})).result.summary.pending,undefined);
@@ -114,8 +116,18 @@ test('Alur admin, pelihat, foto, dan sinkronisasi ESP32-C1',async t=>{
   assert.equal((await call('/auth/signin',{method:'POST',body:reset})).status,200);
   const demoLogin=await call('/auth/signin',{method:'POST',body:{email:'demo@example.test',password:'demo-only-pass'}});
   assert.ok(demoLogin.cookie);
+  assert.ok(demoLogin.sessionDays);
   assert.equal((await call('/overview',{cookie:demoLogin.cookie})).result.summary.members,1);
   assert.equal((await call('/admin/users',{cookie:demoLogin.cookie})).status,403);
+  const switchDemo=(role,cookie)=>call('/demo/role/'+role,{method:'POST',cookie});
+  assert.equal((await switchDemo('admin',viewer)).status,403);
+  const demoAdmin=(await switchDemo('admin',demoLogin.cookie)).cookie;
+  assert.equal((await call('/session',{cookie:demoAdmin})).result.user.role,'admin');
+  const sampleUsers=await call('/admin/users',{cookie:demoAdmin});
+  assert.equal(sampleUsers.result[0].email,'anggota@example.test');
+  assert.equal((await call('/admin/users',{method:'POST',cookie:demoAdmin,body:{}})).status,403);
+  const demoViewer=(await switchDemo('viewer',demoAdmin)).cookie;
+  assert.equal((await call('/admin/users',{cookie:demoViewer})).status,403);
   assert.equal((await call('/admin/users/'+invited.result.id+'/recovery',{method:'POST',cookie:viewer})).status,403);
   assert.ok((await call('/admin/users/'+invited.result.id+'/recovery',{method:'POST',cookie:admin})).result.recovery);
 

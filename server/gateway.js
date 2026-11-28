@@ -1,3 +1,4 @@
+import { SESSION_MS } from './session-duration.js';
 import express from 'express';
 import {rateLimit} from 'express-rate-limit';
 import {createHmac, createHash, randomBytes, timingSafeEqual, scryptSync} from 'node:crypto';
@@ -13,6 +14,10 @@ export async function createApp(env=process.env,demo=false,fixtures={}){
   const email=env.OWNER_DEMO_EMAIL?.trim().toLowerCase(), password=env.OWNER_DEMO_PASSWORD;
   const key=email && password?.length>=8 && password.length<=128?scryptSync(password,'elite-demo:'+email,32):null;
   const sign=value=>createHmac('sha256',key).update(value).digest('base64url');
+  function demoCookie(res,role,expires){
+    const payload=['demo',expires,randomBytes(16).toString('hex'),role].join('.');
+    res.cookie('elite_session',payload+'.'+sign(payload),{...options,maxAge:expires-Date.now()});
+  }
   let backend;
   app.use('/api',(req,res,next)=>{res.set('Cache-Control','no-store');next()});
   app.post('/api/auth/signin',express.json({limit:'32kb'}),(req,res,next)=>{
@@ -21,23 +26,32 @@ export async function createApp(env=process.env,demo=false,fixtures={}){
     next();
   },rateLimit({windowMs:60000,limit:20,message:{error:'Coba kembali sebentar.'}}),(req,res)=>{
     if(!key || typeof req.body.password!=='string' || !equal(req.body.password,password))return res.status(401).json({error:'Email atau kata sandi salah.'});
-    const value='demo.'+(Date.now()+3600000)+'.'+randomBytes(16).toString('hex');
-    res.cookie('elite_session',value+'.'+sign(value),{...options,maxAge:3600000}).json({ok:true});
+    demoCookie(res,'viewer',Date.now()+SESSION_MS);
+    return res.json({ok:true});
   });
   app.use('/api',(req,res,next)=>{
     const session=req.headers.cookie?.match(/(?:^|; *)elite_session=([^;]+)/)?.[1];
     const guest={user:null,demo};
     if(!session?.startsWith('demo.')){
+      if(req.path.startsWith('/demo/role/'))return res.status(403).json({error:'Khusus akun demo.'});
       if(!session && req.method==='GET' && req.path==='/session') return res.json(guest);
       return next();
     }
-    const [,exp,nonce,mac]=session.split('.');
-    if(!key || Number(exp)<=Date.now() || !/^\d{13}$/.test(exp) || !mac || !equal(mac,sign(['demo',exp,nonce].join('.')))){
+    const parts=session.split('.');
+    const mac=parts.pop(), exp=parts[1];
+    // Existing three-field payloads represent a viewer session.
+    const role=parts.length===3?'viewer':parts[3];
+    if(!key || Number(exp)<=Date.now() || !/^\d{13}$/.test(exp) || !mac || !['viewer','admin'].includes(role) || !equal(mac,sign(parts.join('.')))){
       res.clearCookie('elite_session',options);
       return req.path==='/session'?res.json(guest):res.status(401).json({error:'Silakan masuk kembali.'});
     }
+    if(req.method==='POST' && ['/demo/role/admin','/demo/role/viewer'].includes(req.path)){
+      if(req.get('origin')!==origin)return res.status(403).json({error:'Asal permintaan tidak diizinkan.'});
+      demoCookie(res,req.path.endsWith('/admin')?'admin':'viewer',Number(exp));
+      return res.json({ok:true});
+    }
     if(req.method==='POST' && req.path==='/auth/logout' && req.get('origin')===origin)return res.clearCookie('elite_session',options).sendStatus(204);
-    if(req.method==='GET' && req.path==='/session')return res.json({demo:false,user:{email,name:'Demo ELITE',id:0,role:'viewer',owner_demo:true}});
+    if(req.method==='GET' && req.path==='/session')return res.json({demo:false,user:{email,name:'Demo ELITE',id:0,role,owner_demo:true}});
     const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
     const member={id:1,member_id:1,full_name:'Anggota Contoh',class_name:'XI',division:'Teknik Elektronika'};
     const day=new Date(today+'T12:00:00Z').getUTCDay();
@@ -47,6 +61,12 @@ export async function createApp(env=process.env,demo=false,fixtures={}){
       '/picket':[member],'/reports':[],'/insights':{trend:[{date:today,present:day===6?1:0,excused:0}],activity:[]}
     };
 
+    if(role==='admin'){
+      sample['/overview'].summary.pending=0;
+      sample['/admin/members']=[{...member,is_active:true}];
+      sample['/admin/users']=[{id:1,email:'anggota@example.test',name:member.full_name,role:'viewer',is_active:true,signed_in:true}];
+      sample['/admin/audit']=[];
+    }
     if(req.method==='GET' && Object.hasOwn(sample,req.path))return res.json(sample[req.path]);
     return res.status(403).json({error:'Akun demo hanya dapat melihat data contoh.'});
   });
